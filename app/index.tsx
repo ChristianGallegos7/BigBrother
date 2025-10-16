@@ -37,7 +37,7 @@ export default function LoginScreen() {
         return;
       }
       console.log('Antes de entrar a la funcion IniciarSesionApp');
-      const resultData = await IniciarSesionApp(user, password);
+      const resultData = await IniciarSesionApp(user, password, router);
       console.log('Despues de entrar a la funcion IniciarSesionApp', resultData);
       if (resultData === 'blocked') {
         setLoading(false);

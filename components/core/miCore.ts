@@ -32,19 +32,11 @@ async function obtenerTokenAcceso() {
     environment.apiGateway.conexion.conectando = true;
 
     const response = await httpRequest({ url, method: "POST", headers, body: {} });
-
     console.log("TOKEN:" + response)
     console.log('RESPONSE', response);
     environment.apiGateway.conexion.conectando = false;
 
-    let parsedData = {};
-    try {
-      parsedData = JSON.parse(response.data || '{}');
-    } catch (err) {
-      console.log('❌ Error al parsear response.data:', response.data);
-      parsedData = {};
-    }
-    response.data = parsedData;
+    response.data = JSON.parse(response.data || '{}')
 
     if (response.data.CodigoError || response.data.MensajeError) {
       const errorMessage = 'Error Conexión Gateway: ' + response.data.MensajeError;
@@ -233,91 +225,74 @@ async function obtenerTokenAccesoBigBrother(user: any, pass: any) {
   }
 }
 
-async function IniciarSesionApp(user: string, pass: string) {
+async function IniciarSesionApp(user: string, pass: string, navigation: any) {
+  // Las variables de Device, Application, FileSystem, environment, httpRequest, obtenerUrlApi, SecureStore 
+  // y Platform deben estar importadas o accesibles en este scope.
 
   console.log('--- 🚀 Iniciando recopilación de información del dispositivo...');
-  let identificador, nombre, modelo, fabricante, plataforma, sistemaOperativo, versionOs, apiLevel, versionSdkAndroid, esDispositivoVirtual, espacioLibreDisco, espacioTotalDisco, memoriaUsada, VersionApp;
-  try {
-    identificador = Device.osName === 'iOS'
-      ? await Application.getIosIdForVendorAsync()
-      : await Application.getAndroidId();
-    console.log('✅ Identificador:', identificador);
-    nombre = Device.deviceName;
-    modelo = Device.modelName;
-    fabricante = Device.manufacturer;
-    plataforma = Platform.OS;
-    sistemaOperativo = Device.osName;
-    versionOs = Device.osVersion;
-    if (Device.osName === 'Android') {
-      apiLevel = Device.platformApiLevel?.toString() || 'N/A';
-    } else {
-      apiLevel = 'N/A_iOS_o_Otro';
-    }
-    versionSdkAndroid = apiLevel;
-    esDispositivoVirtual = !Device.isDevice;
-    espacioLibreDisco = await FileSystem.getFreeDiskStorageAsync();
-    espacioTotalDisco = await FileSystem.getTotalDiskCapacityAsync();
-    memoriaUsada = espacioTotalDisco - espacioLibreDisco;
-    VersionApp = environment.version || '0.0.0';
-    console.log('--- ✅ Información del dispositivo recopilada.');
-  } catch (err) {
-    console.log('❌ Error recopilando info del dispositivo, usando datos quemados:', err);
-    identificador = 'IDFAKE123';
-    nombre = 'MiDispositivo';
-    modelo = 'ModeloX';
-    fabricante = 'MarcaY';
-    plataforma = 'android';
-    sistemaOperativo = 'Android';
-    versionOs = '12.0';
-    apiLevel = '33';
-    versionSdkAndroid = apiLevel;
-    esDispositivoVirtual = false;
-    espacioLibreDisco = 1024 * 1024 * 1024; // 1GB
-    espacioTotalDisco = 8 * 1024 * 1024 * 1024; // 8GB
-    memoriaUsada = espacioTotalDisco - espacioLibreDisco;
-    VersionApp = environment.version || '0.0.0';
-    console.log('--- ✅ Información del dispositivo (quemada) lista.');
+
+  // --- 1. Recopilación de Información (MANTENIDO) ---
+  const identificador = Device.osName === 'iOS'
+    ? await Application.getIosIdForVendorAsync()
+    : await Application.getAndroidId();
+  // console.log('✅ Identificador (IDFV/Android ID):', identificador);
+
+  const nombre = Device.deviceName;
+  const modelo = Device.modelName;
+  const fabricante = Device.manufacturer;
+  const plataforma = Platform.OS;
+  const sistemaOperativo = Device.osName; // Lo mantendré como osName
+  const versionOs = Device.osVersion;
+
+  let apiLevel = '';
+  if (Device.osName === 'Android') {
+    apiLevel = Device.platformApiLevel?.toString() || 'N/A';
+  } else {
+    apiLevel = 'N/A_iOS_o_Otro';
   }
+  const versionSdkAndroid = apiLevel; // Campo VersionSdkAndroid
+
+  const esDispositivoVirtual = !Device.isDevice;
+
+  // 6, 7, 8. Espacio en Disco y Memoria
+  const espacioLibreDisco = await FileSystem.getFreeDiskStorageAsync();
+  const espacioTotalDisco = await FileSystem.getTotalDiskCapacityAsync();
+  const memoriaUsada = espacioTotalDisco - espacioLibreDisco;
+
+  const VersionApp = environment.version || '0.0.0';
+  console.log('--- ✅ Información del dispositivo recopilada.');
+  // --- FIN Recopilación ---
 
   try {
-      if (!user || !pass) {
-        console.log('❌ Error: Usuario o Contraseña es nulo.');
-        return false;
-      }
+    if (!user || !pass) {
+      console.log('❌ Error: Usuario o Contraseña es nulo.');
+      return false;
+    }
 
-      const headers = {
-        Sesion: JSON.stringify({
-          Pais: environment.pais,
-          Sistema: environment.sistema,
-          Ambiente: environment.ambiente,
-        }),
-      };
-      // console.log('--- 🛠️ Headers (Sesion) preparados:', headers.Sesion);
+    const headers = {
+      Sesion: JSON.stringify({
+        Pais: environment.pais,
+        Sistema: environment.sistema,
+        Ambiente: environment.ambiente,
+      }),
+    };
+    // console.log('--- 🛠️ Headers (Sesion) preparados:', headers.Sesion);
+
     // 🚨 OBJETO DeviceInfo FINAL Y COMPLETO 🚨
     const deviceInfo = {
-      IdDispositivoApp: 0,
-      IdSistema: 1, // Puedes ajustar según tu lógica
       Identificador: identificador,
       Nombre: nombre,
       Modelo: modelo,
-      Plataforma: plataforma,
+      Plataforma: plataforma, // 'ios' o 'android'
       SistemaOperativo: sistemaOperativo,
       VersionOs: versionOs,
-      VersionIos: '',
-      VersionSdkAndroid: versionSdkAndroid,
       Fabricante: fabricante,
+      VersionSdkAndroid: versionSdkAndroid, // <-- CAMPO FALTANTE AGREGADO
       EsDispositivoVirtual: esDispositivoVirtual,
-      MemoriaUsada: memoriaUsada,
-      EspacioLibreDisco: espacioLibreDisco,
-      EspacioTotalDisco: espacioTotalDisco,
-      EspacioLibreRealDisco: espacioLibreDisco,
-      EspacioTotalRealDisco: espacioTotalDisco,
-      IdPushManager: '',
-      FechaRegistro: new Date(),
-      FechaUltimoAcceso: null,
-      UsuarioAsignado: user,
       VersionApp: VersionApp,
-      IdSistemaNavigation: null
+      MemoriaUsada: memoriaUsada, // <-- CAMPO FALTANTE AGREGADO
+      EspacioLibreDisco: espacioLibreDisco, // <-- CAMPO FALTANTE AGREGADO
+      EspacioTotalDisco: espacioTotalDisco, // <-- CAMPO FALTANTE AGREGADO
     };
 
     // console.log('--- ℹ️ DeviceInfo final a enviar:', JSON.stringify(deviceInfo, null, 2));
@@ -325,11 +300,8 @@ async function IniciarSesionApp(user: string, pass: string) {
     const body = {
       UserName: user,
       Clave: pass,
-      HostConexion: '',
-      EsMovil: true,
-      TieneEncriptacion: false,
-      TipoEncriptacion: '',
-      DeviceInfo: deviceInfo
+      DeviceInfo: deviceInfo,
+      // Nota: Aquí puedes agregar hostConexion si es necesario, aunque en móvil no suele usarse.
     };
 
     const urlApi = obtenerUrlApi();
@@ -337,7 +309,7 @@ async function IniciarSesionApp(user: string, pass: string) {
 
     // Usar "inicioSesion" como en el backend, no "iniciarSesion"
     const response = await httpRequest({ url: `${urlApi}/Auth/iniciarSesion`, method: "POST", headers, body: body });
-    
+
     if (response.status === 200) {
       const datos = response.data;
       environment.datosSesion = datos;
