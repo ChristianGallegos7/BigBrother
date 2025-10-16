@@ -1,15 +1,33 @@
-import { Stack } from "expo-router";
+import BottomNav from "@/components/BottomNav";
+import { Stack, useSegments } from "expo-router";
 
 const StackLayout = () => {
+    const segments = useSegments();
+    const current = segments[segments.length - 1];
+    const showNav = ["home", "historial", "perfil"].includes(current as string);
     return (
-        <Stack>
-            <Stack.Screen name="home/index"
-                options={{
-                    headerShown: false
+        <>
+            <Stack
+                screenOptions={{
+                    headerShown: false,
+                    animation: 'ios_from_right',
                 }}
-            />
-        </Stack>
-    )
+            >
+
+                <Stack.Screen name="home/index"
+
+                />
+                <Stack.Screen name="historial/index"
+
+                />
+                <Stack.Screen name="perfil/index"
+
+                />
+
+            </Stack>
+            {showNav && <BottomNav />}
+        </>
+    );
 }
 
 export default StackLayout;
