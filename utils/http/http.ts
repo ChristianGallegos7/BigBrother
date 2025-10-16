@@ -1,48 +1,64 @@
-import { fetch } from 'react-native-ssl-pinning';
-import { environment } from '../../components/core/environment';
+// No necesitas importar 'fetch', es una función global en React Native.
 
-const isProduction = environment.ambiente === 'PROD';
-const isQA = environment.ambiente === 'QA';
+// Definimos una interfaz para que tu código sea más seguro y claro
+interface HttpRequestParams {
+  url: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  headers?: Record<string, string>;
+  body?: any;
+}
+
 export async function httpRequest({
   url,
   method = 'GET',
   headers = {},
   body,
-}: {
-  url: string;
-  method?: string;
-  headers?: Record<string, string>;
-  body?: any;
-}) {
+}: HttpRequestParams) {
   try {
-    const opts: any = {
+    const options: RequestInit = {
       method,
-      headers,
-      timeoutInterval: 120000,
+      headers: {
+        // Añadimos headers comunes por defecto.
+        // Si envías FormData, el Content-Type se maneja solo.
+        'Content-Type': 'application/json',
+        ...headers,
+      },
     };
 
-    if (isProduction) {
-      opts.sslPinning = {certs: ['apibg']};
-    } else {
-      opts.disableAllSecurity = true;
-    }
+    // La lógica de SSL Pinning ya no es necesaria aquí.
+    // Expo lo aplica a nivel de la app durante la compilación.
+
     if (body) {
       if (body instanceof FormData) {
-        opts.body = body;
-      } else if (body) {
-        opts.body = JSON.stringify(body);
+        // Al usar FormData, debemos dejar que el navegador/fetch establezca el Content-Type.
+        delete (options.headers as Record<string, string>)['Content-Type'];
+        options.body = body;
+      } else {
+        options.body = JSON.stringify(body);
       }
     }
 
-    const res = await fetch(url, opts);
-    const parsed = JSON.parse(res.bodyString || '{}');
+    const response = await fetch(url, options);
+
+    // Intentamos parsear la respuesta como JSON.
+    const data = await response.json();
+
+    // 'response.ok' es true si el status es 200-299.
+    // Si no es ok, lanzamos un error para que el bloque catch lo maneje.
+    if (!response.ok) {
+      // Usamos el mensaje de error del backend si existe, o uno genérico.
+      const errorMessage = data?.MensajeError || `Error del servidor: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+
+    // Si todo fue bien, devolvemos el status y los datos.
     return {
-      status: res.status,
-      data: parsed,
+      status: response.status,
+      data: data,
     };
   } catch (error: any) {
-    console.log(JSON.stringify(error));
-    console.log('Error en httpRequest:', error.message || error);
+    console.error('Error en httpRequest:', error.message || error);
+    // Relanzamos el error para que la función que llamó a httpRequest pueda manejarlo.
     throw error;
   }
 }

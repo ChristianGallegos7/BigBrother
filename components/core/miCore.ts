@@ -1,20 +1,19 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-//import {Encriptador} from './encriptador';
 import { Buffer } from 'buffer';
-import { Alert, Platform } from 'react-native';
-import DeviceInfo from 'react-native-device-info';
+import * as Application from 'expo-application';
+import * as Device from 'expo-device';
+import * as FileSystem from 'expo-file-system';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { httpRequest } from '../../utils/http/http';
-import { notify } from '../NotificationProvider';
 import { environment } from './environment';
-
 
 function obtenerUrlApi(): string {
   return environment.urlApi[
     environment.pais as keyof typeof environment.urlApi
   ];
 }
+
 async function obtenerTokenAcceso() {
-  //console.log('iniciar responser')
   try {
     const headers = {
       Sesion: JSON.stringify({
@@ -51,7 +50,7 @@ async function obtenerTokenAcceso() {
       environment.apiGateway.conexion.conectado = true;
       environment.apiGateway.conexion.errorConexion = false;
       environment.apiGateway.token = response.data.Token;
-      await AsyncStorage.setItem('TokenGateway', environment.apiGateway.token);
+      await SecureStore.setItem('TokenGateway', environment.apiGateway.token);
       //console.log('response', response.data);
       return response;
     }
@@ -77,8 +76,6 @@ async function obtenerTokenSinAccesoBigBrother() {
   try {
     const urlApi = obtenerUrlApi();
     const url = `${urlApi}/Auth/obtenerToken`;
-    //environment.apiGateway.conexion.conectando = true;
-
     const headers = {
       Sesion: JSON.stringify({
         Pais: environment.pais,
@@ -98,10 +95,10 @@ async function obtenerTokenSinAccesoBigBrother() {
     } else {
       console.log('Éxito');
       if (response.data.Token) {
-        await AsyncStorage.setItem('Tokenbb', response.data.Token);
+        await SecureStore.setItem('Tokenbb', response.data.Token);
       }
       if (response.data.FechaVigencia) {
-        await AsyncStorage.setItem('TokenExpiration', response.data.FechaVigencia);
+        await SecureStore.setItem('TokenExpiration', response.data.FechaVigencia);
       }
       console.log('response bb', response.data.Token);
       return response.data.token;
@@ -172,11 +169,7 @@ const validarCodigoDesbloqueo = async (userName: string, codigo: string) => {
     const response = await httpRequest({ url, method: "POST", headers, body: {} });
 
     if (response.data.CodigoError || response.data.MensajeError) {
-      Alert.alert(
-        'Error al validar el código de desbloqueo',
-        response.data.MensajeError || 'Error desconocido',
-      );
-      return false;
+      throw new Error(response.data.MensajeError || 'Error desconocido');
     }
 
     return response.data;
@@ -213,9 +206,9 @@ async function obtenerTokenAccesoBigBrother(user: any, pass: any) {
     } else {
       console.log('Éxito');
       if (response.data.Token) {
-        await AsyncStorage.setItem('Tokenbb', response.data.Token);
+        await SecureStore.setItem('Tokenbb', response.data.Token);
       }
-      //await AsyncStorage.setItem('Tokenbb', response.data);
+      //await SecureStore.setItem('Tokenbb', response.data);
       console.log('response bb', response.data.Token);
       return {
         esOk: true,
@@ -225,7 +218,6 @@ async function obtenerTokenAccesoBigBrother(user: any, pass: any) {
   } catch (error: any) {
     console.error('Error al iniciar sesión:', error);
     const mensajeError = error?.MensajeError || error?.message || 'Error de conexión con el servidor';
-    Alert.alert('Error de inicio de sesión', mensajeError);
     return {
       esOk: false,
       token: mensajeError,
@@ -233,36 +225,78 @@ async function obtenerTokenAccesoBigBrother(user: any, pass: any) {
   }
 }
 
-
 async function IniciarSesionApp(user: string, pass: string, navigation: any) {
-  // const token = await AsyncStorage.getItem('Tokenbb');
-  // console.log('Token en IniciarSesion' , token)
+  // ----------------------------------------------------------------------
+  // COMIENZO DE ADAPTACIÓN: Uso de expo-device, expo-application y expo-file-system
+  // ----------------------------------------------------------------------
 
-  const identificador = DeviceInfo.getDeviceId();
-  const nombre = await DeviceInfo.getDeviceName();
-  const modelo = DeviceInfo.getModel();
-  const plataforma = DeviceInfo.getSystemName();
-  const sistemaOperativo = DeviceInfo.getSystemName();
-  const versionOs = DeviceInfo.getSystemVersion();
-  const versionSdkAndroid = (await DeviceInfo.getApiLevel()).toString();
-  const fabricante = await DeviceInfo.getManufacturer();
-  const esDispositivoVirtual = false;
-  const espacioLibreDisco = await DeviceInfo.getFreeDiskStorage();
-  const espacioTotalDisco = await DeviceInfo.getTotalDiskCapacity();
+  console.log('--- 🚀 Iniciando recopilación de información del dispositivo...');
+
+  // 1. IDENTIFICADOR (ID único por proveedor/app, similar a getDeviceId)
+  const identificador = Device.osName === 'iOS'
+    ? await Application.getIosIdForVendorAsync()
+    : await Application.getAndroidId();
+  console.log('✅ Identificador (IDFV/Android ID):', identificador);
+
+  // 2. NOMBRE, MODELO, FABRICANTE
+  const nombre = Device.deviceName; // Usamos deviceName para el nombre 'amigable'
+  const modelo = Device.modelName;
+  const fabricante = Device.manufacturer;
+  console.log('✅ Nombre/Modelo/Fabricante:', `${nombre}/${modelo}/${fabricante}`);
+
+  // 3. PLATAFORMA y SISTEMA OPERATIVO
+  const plataforma = Device.osName;
+  const sistemaOperativo = Device.osName;
+  const versionOs = Device.osVersion;
+  console.log('✅ SO/Versión:', `${sistemaOperativo} ${versionOs}`);
+
+  // 4. VERSIÓN SDK ANDROID (platformApiLevel es para Android)
+  let apiLevel = '';
+  if (Device.osName === 'Android') {
+    apiLevel = Device.platformApiLevel?.toString() || 'N/A';
+    console.log('✅ API Level (Android):', apiLevel);
+  } else {
+    apiLevel = 'N/A_iOS_o_Otro';
+    console.log('ℹ️ API Level (No Android):', apiLevel);
+  }
+  const versionSdkAndroid = apiLevel;
+
+  // 5. DISPOSITIVO VIRTUAL (Invertimos isDevice)
+  const esDispositivoVirtual = !Device.isDevice;
+  console.log('✅ Es Dispositivo Virtual:', esDispositivoVirtual);
+
+  // 6. ESPACIO EN DISCO (Usando expo-file-system)
+  const espacioLibreDisco = await FileSystem.getFreeDiskStorageAsync();
+  const espacioTotalDisco = await FileSystem.getTotalDiskCapacityAsync();
+  
+  // 7. MEMORIA USADA
   const memoriaUsada = espacioTotalDisco - espacioLibreDisco;
-  const espacioLibreRealDisco = await DeviceInfo.getFreeDiskStorage();
-  const espacioTotalRealDisco = await DeviceInfo.getTotalDiskCapacity();
-  const VersionApp = environment.version;
+  console.log(`✅ Disco: Libre ${espacioLibreDisco} / Total ${espacioTotalDisco} (Bytes)`);
+  console.log('✅ Memoria Usada:', memoriaUsada, '(Bytes)');
+  
+  // 8. REDUNDANCIA (Se mantiene la asignación original con los nuevos valores)
+  const espacioLibreRealDisco = espacioLibreDisco;
+  const espacioTotalRealDisco = espacioTotalDisco;
+  
+  // 9. VERSIÓN DE LA APP
+  const VersionApp = environment.version || '0.0.0';
+  console.log('✅ Versión App:', VersionApp);
 
-  if (!user) {
-    throw new Error('Nombre de usuario requerido');
-  }
-
-  if (!pass) {
-    throw new Error('Contraseña requerida');
-  }
+  console.log('--- ✅ Información del dispositivo recopilada.');
+  // ----------------------------------------------------------------------
+  // FIN DE ADAPTACIÓN
+  // ----------------------------------------------------------------------
 
   try {
+    if (!user) {
+      console.log('❌ Error: Nombre de usuario es nulo.');
+      return false;
+    }
+    if (!pass) {
+      console.log('❌ Error: Contraseña es nula.');
+      return false;
+    }
+
     const headers = {
       // Authorization: `Bearer ${token}`,
       Sesion: JSON.stringify({
@@ -271,82 +305,60 @@ async function IniciarSesionApp(user: string, pass: string, navigation: any) {
         Ambiente: environment.ambiente,
       }),
     };
+    console.log('--- 🛠️ Headers (Sesion) preparados:', headers.Sesion);
 
     const deviceInfo = {
       Identificador: identificador,
       Nombre: nombre,
       Modelo: modelo,
-      Plataforma: plataforma,
+      Plataforma: Platform.OS,
       SistemaOperativo: sistemaOperativo,
       VersionOs: versionOs,
-      VersionSdkAndroid: versionSdkAndroid,
       Fabricante: fabricante,
       EsDispositivoVirtual: esDispositivoVirtual,
-      MemoriaUsada: memoriaUsada,
-      EspacioLibreDisco: espacioLibreDisco,
-      EspacioTotalDisco: espacioTotalDisco,
-      EspacioLibreRealDisco: espacioLibreRealDisco,
-      EspacioTotalRealDisco: espacioTotalRealDisco,
       VersionApp: VersionApp,
     };
-
+    
+    console.log('--- ℹ️ DeviceInfo final a enviar:', JSON.stringify(deviceInfo, null, 2));
+    
     const body = {
       UserName: user,
       Clave: pass,
       DeviceInfo: deviceInfo,
     };
 
-    console.log(versionSdkAndroid);
-    console.log(deviceInfo);
-
     const urlApi = obtenerUrlApi();
-
-    console.log(body);
+    console.log('--- 📤 URL de API:', `${urlApi}/Auth/iniciarSesion`);
+    console.log('--- 📤 Body de la solicitud:', body);
+    
     const response = await httpRequest({ url: `${urlApi}/Auth/iniciarSesion`, method: "POST", headers, body: body });
 
     console.log('URL', `${urlApi}/Auth/iniciarSesion`);
 
     if (response.status === 200) {
-      console.log('Entro al 200 OK');
+      console.log('--- ✅ Respuesta recibida: Status 200 OK');
       const datos = response.data;
       environment.datosSesion = datos;
 
       console.log('response Data', JSON.stringify(datos));
 
       if (datos.CodigoError === '03') {
+        console.log('--- ⚠️ Código de Error 03: Usuario bloqueado.');
         return 'blocked';
       }
 
       if (datos && datos.CodigoError && datos.MensajeError) {
         if (datos.CodigoError === '07' || datos.CodigoError === '08') {
-          Alert.alert(
-            'Cambio de Clave',
-            'Se requiere cambio de clave. ¿Desea continuar?',
-            [
-              {
-                text: 'Cancelar',
-                style: 'cancel',
-                onPress: () => {
-                  return false;
-                },
-              },
-              {
-                text: 'Continuar',
-                onPress: () => {
-                  navigation.navigate('cpass', { userName: user });
-                },
-              },
-            ],
-            { cancelable: false },
-          );
-          return false;
+          console.log(`--- ⚠️ Código de Error ${datos.CodigoError}: Se requiere cambio de contraseña.`);
+          return 'changePassword';
         } else {
-          Alert.alert('Error al iniciar sesión', datos?.MensajeError || 'Error desconocido');
+          console.log(`--- ❌ Error de negocio: ${datos.CodigoError} - ${datos.MensajeError}`);
           return false;
         }
       }
 
-      await AsyncStorage.setItem('DataUser', JSON.stringify(datos));
+      await SecureStore.setItem('DataUser', JSON.stringify(datos));
+      console.log('--- ✅ Datos del usuario guardados en SecureStore (DataUser).');
 
       if (datos.IdUsuario > 0) {
         try {
@@ -354,35 +366,37 @@ async function IniciarSesionApp(user: string, pass: string, navigation: any) {
             ...datos,
             Sistema: "BigBrother",
             Ambiente: environment.ambiente,
-            Token: await AsyncStorage.getItem('Tokenbb'), // Usa el campo correcto si existe
+            Token: await SecureStore.getItem('Tokenbb'),
             Pais: environment.pais,
           };
 
-          await AsyncStorage.setItem('SesionUsuario', JSON.stringify(sesionCompleta));
-          await AsyncStorage.setItem('UserName', datos.UserName);
+          await SecureStore.setItem('SesionUsuario', JSON.stringify(sesionCompleta));
+          await SecureStore.setItem('UserName', datos.UserName);
+          console.log('--- ✅ Sesión completa guardada en SecureStore (SesionUsuario).');
           console.log('SesionUsuario guardado:', sesionCompleta);
-          return true;
+          
+          return datos; // Retorna los datos para indicar éxito y proveer la información.
+
         } catch (err: any) {
-          console.error('Error al guardar en AsyncStorage:', err.message);
+          console.error('--- ❌ Error al guardar en SecureStore (final):', err.message);
           return false;
         }
       }
     } else {
-      console.log('Status:', response.status);
+      console.log(`--- ❌ Fallo en la solicitud: Status ${response.status}`);
       return false;
     }
   } catch (error: any) {
-    console.error('Error al iniciar sesión en la aplicación:', error);
+    console.error('--- 🚨 Error general al iniciar sesión en la aplicación:', error.message);
     const mensajeError = error?.message || 'Error de conexión con el servidor';
-    Alert.alert('Error de conexión', mensajeError);
     return false;
   }
 }
 
 async function desconectarUsuario() {
   try {
-    const userName = await AsyncStorage.getItem('UserName');
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const userName = await SecureStore.getItem('UserName');
+    const token = await SecureStore.getItem('Tokenbb');
 
     const pais = environment.pais;
     const sistema = environment.sistema;
@@ -416,7 +430,7 @@ async function desconectarUsuario() {
     if (response.status === 200) {
       //console.log(response.data);
       console.log('Usuario desconectado exitosamente');
-      await AsyncStorage.clear();
+      await SecureStore.isAvailableAsync();
       return true;
     } else {
       console.log('Status:', response.status);
@@ -428,13 +442,8 @@ async function desconectarUsuario() {
       console.error('Status code:', error.response.status);
     } else if (error.request) {
       console.error('Request error:', error.request);
-      Alert.alert(
-        'Error al desconectar el usuario',
-        'Error de conexión - No se pudo conectar al servidor',
-      );
     } else {
       console.error('Error:', error.message);
-      Alert.alert('Error de desconexión', 'No se pudo desconectar el usuario correctamente');
     }
   }
 }
@@ -453,8 +462,8 @@ async function cambiarClave(
   }
 
   try {
-    const token = await AsyncStorage.getItem('Tokenbb');
-    await AsyncStorage.setItem('UserName', user);
+    const token = await SecureStore.getItem('Tokenbb');
+    await SecureStore.setItem('UserName', user);
 
     if (!token) {
       throw new Error('No se encontró un token de acceso.');
@@ -491,25 +500,14 @@ async function cambiarClave(
 
         // Obtener el mensaje de error deseado
         const mensajeError = mensajeErrorObjeto.MensajeError;
-
-        // Mostrar el mensaje de error usando Alert.alert
-        Alert.alert(
-          `Código de Error: ${datos.CodigoError}`,
-          `Mensaje de Error: ${mensajeError}`,
-        );
         return false;
       }
       return true;
     } else {
-      Alert.alert(
-        'Error al cambiar clave del usuario',
-        response.data?.MensajeError || 'Error desconocido',
-      );
       return false;
     }
   } catch (error: any) {
     console.error('Error al cambiar contraseña:', error);
-    Alert.alert('Error', 'No se pudo cambiar la contraseña. Inténtalo nuevamente.');
     return false;
   }
 }
@@ -547,7 +545,7 @@ const CATALOGOS_CACHE_KEY: any = {
 };
 
 async function catalogosList() {
-  const token = await AsyncStorage.getItem('Tokenbb');
+  const token = await SecureStore.getItem('Tokenbb');
   const pais = environment.pais;
   const cacheKey = CATALOGOS_CACHE_KEY[pais];
 
@@ -574,7 +572,7 @@ async function catalogosList() {
 
 
     const datos = response.data;
-    await AsyncStorage.setItem(cacheKey, JSON.stringify(datos));
+    await SecureStore.setItem(cacheKey, JSON.stringify(datos));
 
     if (datos?.CodigoError && datos?.MensajeError) {
       const mensajeError = JSON.parse(datos.MensajeError)?.MensajeError;
@@ -587,17 +585,14 @@ async function catalogosList() {
 
     if (error.message === 'Network Error') {
 
-      notify("No tienes conexión a internet", true)
 
-      const local = await AsyncStorage.getItem(cacheKey);
+      const local = await SecureStore.getItem(cacheKey);
       return local ? local : false;
     }
 
     if (error.response?.data?.MensajeError) {
       const msg = error.response.data.MensajeError;
-      Alert.alert("Error de conexión", "No se pudo obtener los catálogos: " + msg);
     } else {
-      Alert.alert("Sin conexión", "No se pudo obtener los catálogos, intente más tarde.");
     }
 
     return false;
@@ -611,11 +606,11 @@ async function IniciarGrabacion(
   Longitud: any,
   FechaInicioGrabacion?: any,
 ) {
-  const sesionUsuario: any = await AsyncStorage.getItem('SesionUsuario');
+  const sesionUsuario: any = await SecureStore.getItem('SesionUsuario');
   const datosRecuperados = JSON.parse(sesionUsuario);
 
   try {
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const token = await SecureStore.getItem('Tokenbb');
     console.log(token);
 
     if (!token) {
@@ -658,20 +653,18 @@ async function IniciarGrabacion(
       const datos = response.data;
 
       if (datos?.IdGrabacion) {
-        await AsyncStorage.setItem('IdGrabacion', JSON.stringify(datos.IdGrabacion));
+        await SecureStore.setItem('IdGrabacion', JSON.stringify(datos.IdGrabacion));
         console.log('ID GRABACION:', JSON.stringify(datos.IdGrabacion));
       }
 
       return datos; // ✅ DEVUELVE EL OBJETO COMPLETO
     }
     else {
-      Alert.alert('Error de grabación', 'No se pudo iniciar la grabación. Inténtalo nuevamente.');
       console.log('Status:', response.status);
       return false;
     }
   } catch (error: any) {
     console.error('Error al iniciar grabación:', error);
-    Alert.alert('Error', 'No se pudo iniciar la grabación. Verifica tu conexión.');
     return false;
   }
 }
@@ -681,8 +674,8 @@ async function IniciarGrabacion(
 async function eliminarCuenta(): Promise<string> {
   try {
     // Obtener sesión y token
-    const sesionUsuarioRaw = await AsyncStorage.getItem('SesionUsuario');
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const sesionUsuarioRaw = await SecureStore.getItem('SesionUsuario');
+    const token = await SecureStore.getItem('Tokenbb');
 
     if (!token) throw new Error('No se encontró un token de acceso.');
 
@@ -757,7 +750,7 @@ async function subirAudioNube(audioFilePath: string, pais: string, folder = 'aud
   formData.append('folder', folder);
   formData.append('pais', pais);
 
-  const token = await AsyncStorage.getItem('Tokenbb');
+  const token = await SecureStore.getItem('Tokenbb');
   const urlApi = obtenerUrlApi();
 
   const response = await fetch(`${urlApi}/Files/subirArchivoNube`, {
@@ -784,13 +777,13 @@ async function DetenerGrabacion(
   Longitud?: string
 ) {
   try {
-    const sesionUsuario: any = await AsyncStorage.getItem('SesionUsuario');
+    const sesionUsuario: any = await SecureStore.getItem('SesionUsuario');
     const datosRecuperados = JSON.parse(sesionUsuario);
-    const IDString: any = await AsyncStorage.getItem('IdGrabacion');
+    const IDString: any = await SecureStore.getItem('IdGrabacion');
     const ID = parseInt(IDString, 10);
     console.log('ID Grabacion:', ID);
 
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const token = await SecureStore.getItem('Tokenbb');
     if (!token) throw new Error('No se encontró un token de acceso.');
 
     // 🆕 Subir el archivo a la nube primero
@@ -838,16 +831,14 @@ async function DetenerGrabacion(
 
 
     if (response.status === 200) {
-      await AsyncStorage.removeItem('IdGrabacion');
-      await AsyncStorage.removeItem('UES');
+      await SecureStore.deleteItemAsync('IdGrabacion');
+      await SecureStore.deleteItemAsync('UES');
       return response.data;
     } else {
-      Alert.alert('Error de grabación', 'No se pudo detener la grabación correctamente');
       return null;
     }
   } catch (error: any) {
     console.error('Error al detener grabación:', error);
-    Alert.alert('Error', 'No se pudo detener la grabación. Inténtalo nuevamente.');
     return null;
   }
 }
@@ -881,9 +872,9 @@ async function RegistroGrabacion(
   let datosRecuperados: any = {};
 
   try {
-    const sesionUsuario = await AsyncStorage.getItem('SesionUsuario');
+    const sesionUsuario = await SecureStore.getItem('SesionUsuario');
     const datosRecuperados = sesionUsuario ? JSON.parse(sesionUsuario) : {};
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const token = await SecureStore.getItem('Tokenbb');
 
     if (!token) throw new Error('No se encontró un token de acceso.');
 
@@ -950,13 +941,13 @@ async function RegistroGrabacion(
       EsGrabacionLocal: esLocal
     };
 
-    const existentes = await AsyncStorage.getItem('grabacionesPendientes');
+    const existentes = await SecureStore.getItem('grabacionesPendientes');
     const array = existentes ? JSON.parse(existentes) : [];
     array.push(grabacionPendiente);
-    await AsyncStorage.setItem('grabacionesPendientes', JSON.stringify(array));
+    await SecureStore.setItem('grabacionesPendientes', JSON.stringify(array));
 
     // Además: guardamos en lastFailedAudio y selectedItem para reintento manual
-    await AsyncStorage.setItem('lastFailedAudio', JSON.stringify({
+    await SecureStore.setItem('lastFailedAudio', JSON.stringify({
       audioFileData: audioBase64,
       metadata: {
         user: datosRecuperados?.UserName || user || 'ADMIN',
@@ -972,7 +963,7 @@ async function RegistroGrabacion(
       }
     }));
 
-    await AsyncStorage.setItem('selectedItem', JSON.stringify({
+    await SecureStore.setItem('selectedItem', JSON.stringify({
       Identificacion,
       IdClienteCarga: IDCliente,
       Agencia,
@@ -1009,9 +1000,9 @@ async function RegistroGrabacionGT(
   let datosRecuperados: any = {};
 
   try {
-    const sesionUsuario: any = await AsyncStorage.getItem('SesionUsuario');
+    const sesionUsuario: any = await SecureStore.getItem('SesionUsuario');
     const datosRecuperados = JSON.parse(sesionUsuario);
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const token = await SecureStore.getItem('Tokenbb');
 
     if (!token) throw new Error('No se encontró un token de acceso.');
 
@@ -1073,13 +1064,13 @@ async function RegistroGrabacionGT(
       EsGrabacionLocal: esLocal
     };
 
-    const existentes = await AsyncStorage.getItem('grabacionesPendientes');
+    const existentes = await SecureStore.getItem('grabacionesPendientes');
     const array = existentes ? JSON.parse(existentes) : [];
 
     array.push(grabacionPendiente);
-    await AsyncStorage.setItem('grabacionesPendientes', JSON.stringify(array));
+    await SecureStore.setItem('grabacionesPendientes', JSON.stringify(array));
 
-    await AsyncStorage.setItem('lastFailedAudio', JSON.stringify({
+    await SecureStore.setItem('lastFailedAudio', JSON.stringify({
       audioFileData: audioBase64,
       metadata: {
         user: datosRecuperados?.UserName || user || 'ADMIN',
@@ -1095,7 +1086,7 @@ async function RegistroGrabacionGT(
       }
     }));
 
-    await AsyncStorage.setItem('selectedItem', JSON.stringify({
+    await SecureStore.setItem('selectedItem', JSON.stringify({
       Identificacion,
       IdClienteCarga: IDCliente,
       Agencia,
@@ -1110,7 +1101,7 @@ async function RegistroGrabacionGT(
 
 
 async function ConsultarGrabacionesUsuarioHoy() {
-  const sesionUsuario: any = await AsyncStorage.getItem('SesionUsuario');
+  const sesionUsuario: any = await SecureStore.getItem('SesionUsuario');
   const datosRecuperados = JSON.parse(sesionUsuario);
 
   const userName = datosRecuperados.UserName;
@@ -1120,7 +1111,7 @@ async function ConsultarGrabacionesUsuarioHoy() {
   }
 
   try {
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const token = await SecureStore.getItem('Tokenbb');
     console.log(token);
 
     if (!token) {
@@ -1145,29 +1136,21 @@ async function ConsultarGrabacionesUsuarioHoy() {
     if (response.status === 200) {
       const datos = response.data;
       //console.log('Audios Hoy', datos);
-      await AsyncStorage.setItem('DatosLista', JSON.stringify(datos));
+      await SecureStore.setItem('DatosLista', JSON.stringify(datos));
 
       return datos;
     } else {
       console.log('Status:', response.status);
-      Alert.alert(
-        'Sin datos',
-        'No se pudieron consultar las grabaciones en este momento',
-      );
       return [];
     }
   } catch (error: any) {
     console.error('Error al consultar lista clientes:', error);
 
     if (error.message === 'Network Error') {
-      notify(
-        'Sin conexión, No tienes conexión a internet. Intenta nuevamente cuando estés conectado.', true
-      );
+
     } else if (error.response) {
       const mensaje = error.response.data?.MensajeError || 'Error del servidor.';
-      notify('Error del servidor', true);
     } else {
-      notify('Error inesperado, Ocurrió un problema al consultar los clientes.', true);
     }
 
     return [];
@@ -1176,7 +1159,7 @@ async function ConsultarGrabacionesUsuarioHoy() {
 
 // #region CONSULTAR LISTA DE CLIENTES
 async function ConsultarListaCliente() {
-  const sesionUsuario: any = await AsyncStorage.getItem('SesionUsuario');
+  const sesionUsuario: any = await SecureStore.getItem('SesionUsuario');
   const datosRecuperados = JSON.parse(sesionUsuario);
 
   const userName = datosRecuperados.UserName;
@@ -1186,7 +1169,7 @@ async function ConsultarListaCliente() {
   }
 
   try {
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const token = await SecureStore.getItem('Tokenbb');
     console.log(token);
 
     if (!token) {
@@ -1208,29 +1191,21 @@ async function ConsultarListaCliente() {
     if (response.status === 200) {
       const datos = response.data;
       console.log('Audios Hoy', datos);
-      await AsyncStorage.setItem('DatosListaCliente', JSON.stringify(datos));
+      await SecureStore.setItem('DatosListaCliente', JSON.stringify(datos));
 
       return datos;
     } else {
       console.log('Status:', response.status);
-      Alert.alert(
-        'Sin datos',
-        'No se pudieron consultar los clientes en este momento',
-      );
       return [];
     }
   } catch (error: any) {
     console.error('Error al consultar lista clientes:', error);
 
     if (error.message === 'Network Error') {
-      notify(
-        'Sin conexión, No tienes conexión a internet. Intenta nuevamente cuando estés conectado.', true
-      );
+
     } else if (error.response) {
       const mensaje = error.response.data?.MensajeError || 'Error del servidor.';
-      notify('Error del servidor', mensaje);
     } else {
-      notify('Error inesperado, Ocurrió un problema al consultar los clientes.', true);
     }
 
     return [];
@@ -1240,8 +1215,8 @@ async function ConsultarListaCliente() {
 
 export async function ArchivarCliente(cliente: any) {
   try {
-    const sesionUsuario: any = await AsyncStorage.getItem('SesionUsuario');
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const sesionUsuario: any = await SecureStore.getItem('SesionUsuario');
+    const token = await SecureStore.getItem('Tokenbb');
 
     if (!token || !sesionUsuario) {
       throw new Error('Faltan datos de sesión');
@@ -1263,16 +1238,11 @@ export async function ArchivarCliente(cliente: any) {
 
     if (response.status === 200) {
       return response.data;
-    } else {
-      Alert.alert('Error', 'No se pudo archivar el cliente. Inténtalo nuevamente.');
     }
   } catch (error: any) {
     if (error.message === 'Network Error') {
-      notify('Sin conexión,No tienes conexión a internet.', true);
     } else if (error.response) {
-      notify('Error', error.response.data?.MensajeError || 'Error del servidor');
     } else {
-      notify('Error inesperado, Ocurrió un problema. Intenta más tarde.', true);
     }
 
     throw error;
@@ -1280,7 +1250,7 @@ export async function ArchivarCliente(cliente: any) {
 }
 
 async function GrabarCliente(cliente: any) {
-  const sesionUsuario: any = await AsyncStorage.getItem('SesionUsuario');
+  const sesionUsuario: any = await SecureStore.getItem('SesionUsuario');
   const datosRecuperados = JSON.parse(sesionUsuario);
   const userName = datosRecuperados?.UserName;
 
@@ -1289,7 +1259,7 @@ async function GrabarCliente(cliente: any) {
   }
 
   try {
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const token = await SecureStore.getItem('Tokenbb');
     if (!token) throw new Error('No se encontró un token de acceso.');
 
     const headers = {
@@ -1333,7 +1303,6 @@ async function GrabarCliente(cliente: any) {
       return datos;
     } else {
       console.log('❌ Status no 200:', response.status);
-      Alert.alert('Error al grabar al cliente', response.data?.MensajeError || 'Error desconocido');
       return null;
     }
 
@@ -1343,8 +1312,6 @@ async function GrabarCliente(cliente: any) {
     if (error?.response?.data) {
       console.warn('⚠️ Error de respuesta del servidor:', error.response.data);
     }
-
-    Alert.alert('Error al grabar cliente', 'Ocurrió un error inesperado. Inténtalo nuevamente.');
     return null;
   }
 }
@@ -1375,7 +1342,7 @@ async function crearDispositivo(
   fechaUltimoAcceso: Date,
   usuarioAsignado?: string,
 ) {
-  const sesionUsuario: any = await AsyncStorage.getItem('SesionUsuario');
+  const sesionUsuario: any = await SecureStore.getItem('SesionUsuario');
   const datosRecuperados = JSON.parse(sesionUsuario);
 
   if (!usuario) {
@@ -1383,7 +1350,7 @@ async function crearDispositivo(
   }
 
   try {
-    const token = await AsyncStorage.getItem('Tokenbb');
+    const token = await SecureStore.getItem('Tokenbb');
     console.log(token);
 
     if (!token) {
@@ -1436,7 +1403,6 @@ async function crearDispositivo(
       return true;
     } else {
       console.log('Status:', response.status);
-      Alert.alert('Error al crear dispositivo', 'No se pudo registrar el dispositivo correctamente');
       return false;
     }
   } catch (error) {
@@ -1445,19 +1411,10 @@ async function crearDispositivo(
   }
 }
 
-// Exporta las funciones que necesites utilizar en tu código.
 export {
-    cambiarClave, catalogosList,
-    ConsultarGrabacionesUsuarioHoy,
-    ConsultarListaCliente, crearDispositivo, desconectarUsuario, DetenerGrabacion, eliminarCuenta, generarCodigoDesbloqueo, GrabarCliente, IniciarGrabacion, IniciarSesionApp, obtenerTokenAcceso, obtenerTokenAccesoBigBrother,
-    obtenerTokenSinAccesoBigBrother, regenerarClavePorOlvido, RegistroGrabacion, RegistroGrabacionGT, validarCodigoDesbloqueo
+  cambiarClave, catalogosList,
+  ConsultarGrabacionesUsuarioHoy,
+  ConsultarListaCliente, crearDispositivo, desconectarUsuario, DetenerGrabacion, eliminarCuenta, generarCodigoDesbloqueo, GrabarCliente, IniciarGrabacion, IniciarSesionApp, obtenerTokenAcceso, obtenerTokenAccesoBigBrother,
+  obtenerTokenSinAccesoBigBrother, regenerarClavePorOlvido, RegistroGrabacion, RegistroGrabacionGT, validarCodigoDesbloqueo
 };
-
-function setSnackbarMessage(arg0: string) {
-  throw new Error('Function not implemented.');
-}
-
-function setSnackbarVisible(arg0: boolean) {
-  throw new Error('Function not implemented.');
-}
 
