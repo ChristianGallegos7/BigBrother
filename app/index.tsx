@@ -1,9 +1,11 @@
 import { environment } from "@/components/core/environment";
 import { IniciarSesionApp, obtenerTokenAccesoBigBrother } from "@/components/core/miCore";
+import CustomLoading from "@/components/CustomLoading";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
-import { Redirect, useRouter } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet } from "react-native";
+import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 export default function LoginScreen() {
 
@@ -28,13 +30,15 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       const tokenResponse = await obtenerTokenAccesoBigBrother(user, password);
+      console.log('Pase la funcion de obtenerTokenAccesoBigBrother');
       if (!tokenResponse.esOk) {
         showErrorToast("Error de Autenticación", tokenResponse.token || "Credenciales incorrectas.");
         setLoading(false);
         return;
       }
-      const resultData = await IniciarSesionApp(user, password, router);
-      
+      console.log('Antes de entrar a la funcion IniciarSesionApp');
+      const resultData = await IniciarSesionApp(user, password);
+      console.log('Despues de entrar a la funcion IniciarSesionApp', resultData);
       if (resultData === 'blocked') {
         setLoading(false);
         showErrorToast("Usuario Bloqueado", "Tu usuario ha sido bloqueado. Contacta al administrador.");
@@ -62,70 +66,70 @@ export default function LoginScreen() {
 
   return (
 
-    // <View style={styles.container}>
-    //   <View style={styles.header}>
-    //     <Image
-    //       source={require("../assets/images/bigbrother.jpg")}
-    //       style={styles.headerImage}
-    //     />
-    //     <Text style={styles.headerTitle}>Big Brother</Text>
-    //   </View>
-    //   <Text style={styles.secondTitle}>Bienvenido!</Text>
-    //   <Text style={styles.thirdTitle}>Inicia sesión para continuar</Text>
-    //   {/* Input usuario */}
-    //   <View style={styles.inputContainer}>
-    //     <Feather name="user" size={24} color="black" />
-    //     <TextInput style={styles.input} placeholder="Usuario" value={user}
-    //       onChangeText={setUser} />
-    //   </View>
-    //   {/* Input contraseña */}
-    //   <View style={styles.inputContainer}>
-    //     <Feather name="lock" size={24} color="black" />
-    //     <TextInput style={styles.input} placeholder="Contraseña" secureTextEntry={secureTextEntry} value={password}
-    //       onChangeText={setPassword}
-    //     />
-    //     <TouchableOpacity onPress={() => setSecureTextEntry(!secureTextEntry)}><Feather name={secureTextEntry ? "eye-off" : "eye"} size={24} color="black" /></TouchableOpacity>
-    //   </View>
-    //   {/* Imagenes de los paises */}
-    //   <View style={styles.flagsContainer}>
-    //     <TouchableOpacity onPress={() => handlePaisSelect("PE")} >
-    //       <View style={[styles.flagWrapper, pais === 'PE' && styles.selectedFlag]} >
-    //         <Image source={require("../assets/images/peru.png")} style={styles.flag} />
-    //       </View>
-    //     </TouchableOpacity>
-    //     <TouchableOpacity onPress={() => handlePaisSelect("EC")}>
-    //       <View style={[styles.flagWrapper, pais === 'EC' && styles.selectedFlag]} >
-    //         <Image source={require("../assets/images/ecuador.png")} style={styles.flag} />
-    //       </View>
-    //     </TouchableOpacity>
-    //     <TouchableOpacity onPress={() => handlePaisSelect("GT")}>
-    //       <View style={[styles.flagWrapper, pais === 'GT' && styles.selectedFlag]} >
-    //         <Image source={require("../assets/images/guatemala.png")} style={styles.flag} />
-    //       </View>
-    //     </TouchableOpacity>
-    //   </View>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Image
+          source={require("../assets/images/bigbrother.jpg")}
+          style={styles.headerImage}
+        />
+        <Text style={styles.headerTitle}>Big Brother</Text>
+      </View>
+      <Text style={styles.secondTitle}>Bienvenido!</Text>
+      <Text style={styles.thirdTitle}>Inicia sesión para continuar</Text>
+      {/* Input usuario */}
+      <View style={styles.inputContainer}>
+        <Feather name="user" size={24} color="black" />
+        <TextInput style={styles.input} placeholder="Usuario" value={user}
+          onChangeText={setUser} />
+      </View>
+      {/* Input contraseña */}
+      <View style={styles.inputContainer}>
+        <Feather name="lock" size={24} color="black" />
+        <TextInput style={styles.input} placeholder="Contraseña" secureTextEntry={secureTextEntry} value={password}
+          onChangeText={setPassword}
+        />
+        <TouchableOpacity onPress={() => setSecureTextEntry(!secureTextEntry)}><Feather name={secureTextEntry ? "eye-off" : "eye"} size={24} color="black" /></TouchableOpacity>
+      </View>
+      {/* Imagenes de los paises */}
+      <View style={styles.flagsContainer}>
+        <TouchableOpacity onPress={() => handlePaisSelect("PE")} >
+          <View style={[styles.flagWrapper, pais === 'PE' && styles.selectedFlag]} >
+            <Image source={require("../assets/images/peru.png")} style={styles.flag} />
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handlePaisSelect("EC")}>
+          <View style={[styles.flagWrapper, pais === 'EC' && styles.selectedFlag]} >
+            <Image source={require("../assets/images/ecuador.png")} style={styles.flag} />
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handlePaisSelect("GT")}>
+          <View style={[styles.flagWrapper, pais === 'GT' && styles.selectedFlag]} >
+            <Image source={require("../assets/images/guatemala.png")} style={styles.flag} />
+          </View>
+        </TouchableOpacity>
+      </View>
 
-    //   <TouchableOpacity style={styles.button} onPress={() => {
-    //     IniciarSesion();
-    //   }} >
-    //     <Text style={styles.buttonText} >
-    //       Iniciar Sesión
-    //     </Text>
-    //   </TouchableOpacity>
-    //   <Text style={styles.forgotPasswordText}>
-    //     ¿Te olvidaste tu contraseña?
-    //   </Text>
-    //   <TouchableOpacity style={[styles.button, styles.recoverButton]}>
-    //     <Text style={styles.buttonText}>
-    //       Recuperar contraseña
-    //     </Text>
-    //   </TouchableOpacity>
-    //   <Text style={{ marginTop: 20, color: "gray" }}>
-    //     Versión {environment.version}
-    //   </Text>
-    //   <CustomLoading visible={loading} />
-    // </View>
-    <Redirect href={"/(stack)/home"}/>
+      <TouchableOpacity style={styles.button} onPress={() => {
+        IniciarSesion();
+      }} >
+        <Text style={styles.buttonText} >
+          Iniciar Sesión
+        </Text>
+      </TouchableOpacity>
+      <Text style={styles.forgotPasswordText}>
+        ¿Te olvidaste tu contraseña?
+      </Text>
+      <TouchableOpacity style={[styles.button, styles.recoverButton]}>
+        <Text style={styles.buttonText}>
+          Recuperar contraseña
+        </Text>
+      </TouchableOpacity>
+      <Text style={{ marginTop: 20, color: "gray" }}>
+        Versión {environment.version}
+      </Text>
+      <CustomLoading visible={loading} />
+    </View>
+    // <Redirect href={"/(stack)/home"} />
   );
 }
 

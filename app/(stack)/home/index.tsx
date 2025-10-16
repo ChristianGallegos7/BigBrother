@@ -342,7 +342,9 @@ const HomeScreen = () => {
                     )}
 
                     <View style={styles.actionButtons}>
-                        <TouchableOpacity style={styles.actionButton}>
+                        <TouchableOpacity style={styles.actionButton}
+                        onPress={() => router.push('/listaclientes')}
+                        >
                             <Ionicons name="list" size={25} color="#1a56db" />
                             <Text style={styles.actionButtonText}>Lista</Text>
                         </TouchableOpacity>
@@ -417,20 +419,7 @@ const HomeScreen = () => {
                     <Text style={styles.versionText}>Version: {environment.version}</Text>
                 </ScrollView>
 
-                <View style={styles.bottomNav}>
-                    <TouchableOpacity style={styles.navItem} onPress={() => router.push('/home')}>
-                        <Ionicons name="home" size={28} color="#1a56db" />
-                        <Text style={[styles.navText, styles.navTextActive]}>Inicio</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.navItem} onPress={() => router.push('/historial')}>
-                        <MaterialIcons name="history" size={28} color="#6b7280" />
-                        <Text style={styles.navText}>Historial</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.navItem} onPress={() => {/* Navigate to Perfil */ }}>
-                        <Ionicons name="person" size={28} color="#6b7280" />
-                        <Text style={styles.navText}>Perfil</Text>
-                    </TouchableOpacity>
-                </View>
+                
             </View>
         </SafeAreaView>
     );

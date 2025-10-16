@@ -12,9 +12,9 @@ export const environment = {
     // },
     urlApi: {
         // EC: "http://10.10.44.49:75/Api/Ecuador",
-        EC: "http://10.10.44.49:75/Api/Ecuador",
-        PE: "http://10.10.44.49:75/Api/Peru",
-        GT: "http://10.10.44.49:75/Api/Guatemala"
+        EC: "http://10.10.44.39:75/Api/Ecuador",
+        PE: "http://10.10.44.39:75/Api/Peru",
+        GT: "http://10.10.44.39:75/Api/Guatemala"
     },
     /*       urlSignal: {
             'EC': 'http://10.10.92.120:75/Signal/Ecuador',
@@ -34,7 +34,7 @@ export const environment = {
     encryptSecretKey: 'BigBrother',
     apiGateway: {
         // url: 'https://apicore.inventar-tech.com/MiCore/ApiGateway',
-        url: 'http://10.10.14.74:70/v2/ApiGateway',
+        url: 'http://10.10.44.39:70/ApiGateway',
         /* user: 'LAHtZlOAiX6gsC+r/fhoYg==',
         key: 'GkVbAyLkZcagsC+r/fhoYg==', */
         user: 'USRADMIN',
