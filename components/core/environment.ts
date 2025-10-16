@@ -33,8 +33,8 @@ export const environment = {
     // ambiente: 'PROD',
     encryptSecretKey: 'BigBrother',
     apiGateway: {
-        url: 'https://apicore.inventar-tech.com/MiCore/ApiGateway',
-        /* url: 'http://10.10.14.74:70/ApiGateway', */
+        // url: 'https://apicore.inventar-tech.com/MiCore/ApiGateway',
+        url: 'http://10.10.14.74:70/v2/ApiGateway',
         /* user: 'LAHtZlOAiX6gsC+r/fhoYg==',
         key: 'GkVbAyLkZcagsC+r/fhoYg==', */
         user: 'USRADMIN',
