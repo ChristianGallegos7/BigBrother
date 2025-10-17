@@ -39,21 +39,27 @@ export default function LoginScreen() {
       console.log('Antes de entrar a la funcion IniciarSesionApp');
       const resultData = await IniciarSesionApp(user, password, router);
       console.log('Despues de entrar a la funcion IniciarSesionApp', resultData);
-      if (resultData === 'blocked') {
+      
+      // Verificar si resultData tiene la estructura de error {tipo, mensaje}
+      if (resultData && typeof resultData === 'object' && 'tipo' in resultData) {
         setLoading(false);
-        showErrorToast("Usuario Bloqueado", "Tu usuario ha sido bloqueado. Contacta al administrador.");
-      } else if (resultData === 'changePassword') {
-        setLoading(false);
-        showErrorToast("Cambio de Clave", "Se requiere cambio de clave.");
-        // Aquí podrías navegar a una pantalla de cambio de contraseña si la tienes
-        // router.push('/change-password');
-      } else if (resultData && typeof resultData === 'object') {
+        
+        if (resultData.tipo === 'blocked') {
+          showErrorToast("Usuario Bloqueado", resultData.mensaje);
+        } else if (resultData.tipo === 'changePassword') {
+          showErrorToast("Cambio de Clave", resultData.mensaje);
+          // Aquí podrías navegar a una pantalla de cambio de contraseña si la tienes
+          // router.push('/change-password');
+        } else if (resultData.tipo === 'error') {
+          showErrorToast("Error de inicio de sesión", resultData.mensaje);
+        }
+      } else if (resultData && typeof resultData === 'object' && 'UserName' in resultData) {
         // Login exitoso, resultData contiene los datos del usuario
         setLoading(false);
         showSuccessToast("¡Bienvenido!", `Hola ${resultData.UserName || user}`);
         router.replace('/home');
       } else {
-        // resultData es false, hubo un error
+        // resultData es false u otro valor, hubo un error
         setLoading(false);
         showErrorToast("Error de inicio de sesión", "No se pudo iniciar sesión. Verifica tus credenciales.");
       }

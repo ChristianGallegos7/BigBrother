@@ -1,7 +1,6 @@
 import { Buffer } from 'buffer';
 import * as Application from 'expo-application';
 import * as Device from 'expo-device';
-import * as FileSystem from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { httpRequest } from '../../utils/http/http';
@@ -11,6 +10,20 @@ function obtenerUrlApi(): string {
   return environment.urlApi[
     environment.pais as keyof typeof environment.urlApi
   ];
+}
+
+// Helper: ensure strings don't exceed backend column sizes
+function truncateString(value: any, maxLength: number, label?: string) {
+  try {
+    const str = (value ?? '').toString();
+    if (str.length > maxLength) {
+      console.warn(`⚠️ Campo ${label || ''} excede ${maxLength} chars (${str.length}). Se truncará.`);
+      return str.substring(0, maxLength);
+    }
+    return str;
+  } catch {
+    return (value ?? '').toString().substring(0, maxLength);
+  }
 }
 
 async function obtenerTokenAcceso() {
@@ -226,133 +239,193 @@ async function obtenerTokenAccesoBigBrother(user: any, pass: any) {
 }
 
 async function IniciarSesionApp(user: string, pass: string, navigation: any) {
-  // Las variables de Device, Application, FileSystem, environment, httpRequest, obtenerUrlApi, SecureStore 
-  // y Platform deben estar importadas o accesibles en este scope.
-
-  console.log('--- 🚀 Iniciando recopilación de información del dispositivo...');
-
-  // --- 1. Recopilación de Información (MANTENIDO) ---
-  const identificador = Device.osName === 'iOS'
-    ? await Application.getIosIdForVendorAsync()
-    : await Application.getAndroidId();
-  // console.log('✅ Identificador (IDFV/Android ID):', identificador);
-
-  const nombre = Device.deviceName;
-  const modelo = Device.modelName;
-  const fabricante = Device.manufacturer;
-  const plataforma = Platform.OS;
-  const sistemaOperativo = Device.osName; // Lo mantendré como osName
-  const versionOs = Device.osVersion;
-
-  let apiLevel = '';
-  if (Device.osName === 'Android') {
-    apiLevel = Device.platformApiLevel?.toString() || 'N/A';
-  } else {
-    apiLevel = 'N/A_iOS_o_Otro';
-  }
-  const versionSdkAndroid = apiLevel; // Campo VersionSdkAndroid
-
-  const esDispositivoVirtual = !Device.isDevice;
-
-  // 6, 7, 8. Espacio en Disco y Memoria
-  const espacioLibreDisco = await FileSystem.getFreeDiskStorageAsync();
-  const espacioTotalDisco = await FileSystem.getTotalDiskCapacityAsync();
-  const memoriaUsada = espacioTotalDisco - espacioLibreDisco;
-
-  const VersionApp = environment.version || '0.0.0';
-  console.log('--- ✅ Información del dispositivo recopilada.');
-  // --- FIN Recopilación ---
-
   try {
-    if (!user || !pass) {
-      console.log('❌ Error: Usuario o Contraseña es nulo.');
-      return false;
-    }
+    const identificador = Platform.OS === 'android'
+      ? ((Application.getAndroidId?.() as string | undefined) ?? Application.applicationId)
+      : (await Application.getIosIdForVendorAsync()) ?? Application.applicationId;
 
+    const nombre = Device.deviceName ?? Device.modelName ?? 'Unknown';
+    const modelo = Device.modelName ?? 'Unknown';
+    const plataforma = Device.osName ?? Platform.OS;
+    const sistemaOperativo = plataforma;
+    const versionOs = Device.osVersion ?? 'unknown';
+    const versionSdkAndroid = Platform.OS === 'android'
+      ? (Device.platformApiLevel != null ? String(Device.platformApiLevel) : '0')
+      : '0';
+    const fabricante = Device.manufacturer ?? Device.brand ?? 'Unknown';
+    const esDispositivoVirtual = !Device.isDevice;
+
+    // Expo no expone capacidad/espacio de disco; establecemos 0 para evitar fallos
+    const espacioLibreDisco = 0;
+    const espacioTotalDisco = 0;
+    const memoriaUsada = 0;
+    const espacioLibreRealDisco = 0;
+    const espacioTotalRealDisco = 0;
+    const VersionApp = environment.version;
+
+    // Headers de la solicitud
     const headers = {
       Sesion: JSON.stringify({
         Pais: environment.pais,
         Sistema: environment.sistema,
         Ambiente: environment.ambiente,
       }),
+      'Content-Type': 'application/json',
     };
-    // console.log('--- 🛠️ Headers (Sesion) preparados:', headers.Sesion);
 
-    // 🚨 OBJETO DeviceInfo FINAL Y COMPLETO 🚨
+    // Sanitizar para evitar truncamiento en DB (límites exactos de la tabla DispositivoApp)
     const deviceInfo = {
-      Identificador: identificador,
-      Nombre: nombre,
-      Modelo: modelo,
-      Plataforma: plataforma, // 'ios' o 'android'
-      SistemaOperativo: sistemaOperativo,
-      VersionOs: versionOs,
-      Fabricante: fabricante,
-      VersionSdkAndroid: versionSdkAndroid, // <-- CAMPO FALTANTE AGREGADO
+      Identificador: truncateString(identificador, 64, 'Identificador'),
+      Nombre: truncateString(nombre, 48, 'Nombre'),
+      Modelo: truncateString(modelo, 64, 'Modelo'),
+      Plataforma: truncateString(plataforma, 16, 'Plataforma'),
+      SistemaOperativo: truncateString(sistemaOperativo, 32, 'SistemaOperativo'),
+      VersionOs: truncateString(versionOs, 16, 'VersionOs'),
+      VersionSdkAndroid: truncateString(versionSdkAndroid, 16, 'VersionSdkAndroid'),
+      Fabricante: truncateString(fabricante, 64, 'Fabricante'),
       EsDispositivoVirtual: esDispositivoVirtual,
-      VersionApp: VersionApp,
-      MemoriaUsada: memoriaUsada, // <-- CAMPO FALTANTE AGREGADO
-      EspacioLibreDisco: espacioLibreDisco, // <-- CAMPO FALTANTE AGREGADO
-      EspacioTotalDisco: espacioTotalDisco, // <-- CAMPO FALTANTE AGREGADO
+      MemoriaUsada: memoriaUsada,
+      EspacioLibreDisco: espacioLibreDisco,
+      EspacioTotalDisco: espacioTotalDisco,
+      EspacioLibreRealDisco: espacioLibreRealDisco,
+      EspacioTotalRealDisco: espacioTotalRealDisco,
+      VersionApp: truncateString(VersionApp, 32, 'VersionApp'),
     };
 
-    // console.log('--- ℹ️ DeviceInfo final a enviar:', JSON.stringify(deviceInfo, null, 2));
+    console.log('--- ℹ️ DeviceInfo completo a enviar:', JSON.stringify(deviceInfo, null, 2));
 
+    // Body de la solicitud según DtoLogin del backend
     const body = {
       UserName: user,
       Clave: pass,
       DeviceInfo: deviceInfo,
-      // Nota: Aquí puedes agregar hostConexion si es necesario, aunque en móvil no suele usarse.
     };
 
     const urlApi = obtenerUrlApi();
-    // console.log('--- 📤 URL de API:', `${urlApi}/Auth/inicioSesion`);
+    console.log('--- 📡 Enviando solicitud a:', `${urlApi}/Auth/iniciarSesion`);
 
-    // Usar "inicioSesion" como en el backend, no "iniciarSesion"
-    const response = await httpRequest({ url: `${urlApi}/Auth/iniciarSesion`, method: "POST", headers, body: body });
+    const response = await httpRequest({
+      url: `${urlApi}/Auth/iniciarSesion`,
+      method: 'POST',
+      headers,
+      body,
+    });
+
+    console.log('--- 📥 Respuesta recibida. Status:', response.status);
 
     if (response.status === 200) {
       const datos = response.data;
-      environment.datosSesion = datos;
 
+      // Verificar si hay error en la respuesta
       if (datos && datos.CodigoError) {
-        // Manejo de errores de negocio
-        switch (datos.CodigoError) {
-          case '03': return 'blocked';
-          case '07': // Contraseña Temporal
-          case '08': // Contraseña Expirada
-            return 'changePassword';
+        const codigoError = datos.CodigoError;
+        const mensajeError = datos.MensajeError || '';
+
+        console.log(`--- ⚠️ Error de negocio: ${codigoError} - ${mensajeError}`);
+
+        // Extraer código y mensaje si viene en formato "XX|Mensaje"
+        let errorCode = codigoError;
+        let errorMessage = mensajeError;
+
+        if (mensajeError.includes('|')) {
+          const parts = mensajeError.split('|');
+          errorCode = parts[0];
+          errorMessage = parts[1] || mensajeError;
+        }
+
+        // Retornar objetos con tipo y mensaje para manejar en el componente
+        switch (errorCode) {
+          case '03':
+            return {
+              tipo: 'blocked',
+              mensaje: errorMessage || 'Usuario bloqueado. Contacta al administrador.',
+            };
+          case '07':
+          case '08':
+            return {
+              tipo: 'changePassword',
+              mensaje: errorMessage || 'Se requiere cambio de contraseña.',
+            };
+          case '04':
+            return {
+              tipo: 'error',
+              mensaje: errorMessage || 'Usuario conectado en otra estación.',
+            };
+          case '10':
+            return {
+              tipo: 'error',
+              mensaje: errorMessage || 'Error con el dispositivo.',
+            };
+          case '01':
+            return {
+              tipo: 'error',
+              mensaje: errorMessage || 'Credenciales inválidas.',
+            };
+          case '02':
+            return {
+              tipo: 'error',
+              mensaje: errorMessage || 'Usuario inactivo.',
+            };
+          case '05':
+            return {
+              tipo: 'error',
+              mensaje: errorMessage,
+            };
+          case '06':
+            return {
+              tipo: 'blocked',
+              mensaje: errorMessage || 'Usuario bloqueado automáticamente.',
+            };
+          case '09':
+            return {
+              tipo: 'error',
+              mensaje: errorMessage || 'Usuario sin perfil asignado.',
+            };
           default:
-            console.log(`--- ❌ Error de negocio: ${datos.CodigoError} - ${datos.MensajeError}`);
-            return false;
+            return {
+              tipo: 'error',
+              mensaje: errorMessage || 'Error al iniciar sesión.',
+            };
         }
       }
 
-      // Proceso de login exitoso
+      // Login exitoso
+      environment.datosSesion = datos;
+
       await SecureStore.setItem('DataUser', JSON.stringify(datos));
 
       const sesionCompleta = {
         ...datos,
         Sistema: environment.sistema,
         Ambiente: environment.ambiente,
-        Token: await SecureStore.getItem('Tokenbb'), // Asumiendo que 'Tokenbb' existe o se establece en otro lugar
+        Token: await SecureStore.getItem('Tokenbb'),
         Pais: environment.pais,
       };
 
       await SecureStore.setItem('SesionUsuario', JSON.stringify(sesionCompleta));
       await SecureStore.setItem('UserName', datos.UserName);
+
       console.log('--- ✅ Sesión y DataUser guardados con éxito.');
+      console.log('--- 👤 Usuario:', datos.UserName);
 
       return datos;
-
     } else {
       console.log(`--- ❌ Fallo en la solicitud: Status ${response.status}`);
+      if (response.data) {
+        console.log('--- ❌ Datos de error:', JSON.stringify(response.data));
+      }
       return false;
     }
   } catch (error: any) {
-    console.error('--- 🚨 Error general al iniciar sesión en la aplicación:', error.message);
+    console.error('--- 🚨 Error general al iniciar sesión:', error.message);
+    if (error.response) {
+      console.error('--- 🚨 Response error:', error.response.data);
+      console.error('--- 🚨 Status:', error.response.status);
+    }
     return false;
   }
 }
+
 
 async function desconectarUsuario() {
   try {
