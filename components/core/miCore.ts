@@ -218,11 +218,27 @@ async function obtenerTokenAccesoBigBrother(user: any, pass: any) {
       throw { MensajeError: errorMessage, CodigoError: '504' };
     } else {
       console.log('Éxito');
+
+      // Guardar cada dato en SecureStore con su nombre correspondiente
       if (response.data.Token) {
-        await SecureStore.setItem('Tokenbb', response.data.Token);
+        await SecureStore.setItem('Token', response.data.Token);
       }
-      //await SecureStore.setItem('Tokenbb', response.data);
-      console.log('response bb', response.data.Token);
+      if (response.data.FechaVigencia) {
+        await SecureStore.setItem('FechaVigencia', response.data.FechaVigencia);
+      }
+      if (response.data.TokenMiCore) {
+        await SecureStore.setItem('TokenMiCore', response.data.TokenMiCore);
+      }
+      if (response.data.FechaVigenciaMiCore) {
+        await SecureStore.setItem('FechaVigenciaMiCore', response.data.FechaVigenciaMiCore);
+      }
+
+      console.log('✅ Tokens guardados en SecureStore');
+      console.log('Token:', response.data.Token);
+      console.log('FechaVigencia:', response.data.FechaVigencia);
+      console.log('TokenMiCore:', response.data.TokenMiCore);
+      console.log('FechaVigenciaMiCore:', response.data.FechaVigenciaMiCore);
+
       return {
         esOk: true,
         token: response.data.Token,
@@ -292,7 +308,6 @@ async function IniciarSesionApp(user: string, pass: string, navigation: any) {
       VersionApp: truncateString(VersionApp, 32, 'VersionApp'),
     };
 
-    console.log('--- ℹ️ DeviceInfo completo a enviar:', JSON.stringify(deviceInfo, null, 2));
 
     // Body de la solicitud según DtoLogin del backend
     const body = {
@@ -302,7 +317,6 @@ async function IniciarSesionApp(user: string, pass: string, navigation: any) {
     };
 
     const urlApi = obtenerUrlApi();
-    console.log('--- 📡 Enviando solicitud a:', `${urlApi}/Auth/iniciarSesion`);
 
     const response = await httpRequest({
       url: `${urlApi}/Auth/iniciarSesion`,
@@ -311,7 +325,6 @@ async function IniciarSesionApp(user: string, pass: string, navigation: any) {
       body,
     });
 
-    console.log('--- 📥 Respuesta recibida. Status:', response.status);
 
     if (response.status === 200) {
       const datos = response.data;
@@ -321,7 +334,6 @@ async function IniciarSesionApp(user: string, pass: string, navigation: any) {
         const codigoError = datos.CodigoError;
         const mensajeError = datos.MensajeError || '';
 
-        console.log(`--- ⚠️ Error de negocio: ${codigoError} - ${mensajeError}`);
 
         // Extraer código y mensaje si viene en formato "XX|Mensaje"
         let errorCode = codigoError;
@@ -405,22 +417,15 @@ async function IniciarSesionApp(user: string, pass: string, navigation: any) {
       await SecureStore.setItem('SesionUsuario', JSON.stringify(sesionCompleta));
       await SecureStore.setItem('UserName', datos.UserName);
 
-      console.log('--- ✅ Sesión y DataUser guardados con éxito.');
-      console.log('--- 👤 Usuario:', datos.UserName);
 
       return datos;
     } else {
-      console.log(`--- ❌ Fallo en la solicitud: Status ${response.status}`);
       if (response.data) {
-        console.log('--- ❌ Datos de error:', JSON.stringify(response.data));
       }
       return false;
     }
   } catch (error: any) {
-    console.error('--- 🚨 Error general al iniciar sesión:', error.message);
     if (error.response) {
-      console.error('--- 🚨 Response error:', error.response.data);
-      console.error('--- 🚨 Status:', error.response.status);
     }
     return false;
   }
@@ -436,10 +441,6 @@ async function desconectarUsuario() {
     const sistema = environment.sistema;
     const ambiente = environment.ambiente;
 
-    console.log(userName);
-    console.log(token);
-    console.log(pais);
-    console.log(sistema);
 
     if (!token) {
       throw new Error('No se encontró un token de acceso.');

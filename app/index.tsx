@@ -38,7 +38,6 @@ export default function LoginScreen() {
       }
       console.log('Antes de entrar a la funcion IniciarSesionApp');
       const resultData = await IniciarSesionApp(user, password, router);
-      console.log('Despues de entrar a la funcion IniciarSesionApp', resultData);
       
       // Verificar si resultData tiene la estructura de error {tipo, mensaje}
       if (resultData && typeof resultData === 'object' && 'tipo' in resultData) {

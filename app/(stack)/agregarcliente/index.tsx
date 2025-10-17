@@ -2,6 +2,7 @@ import { environment } from "@/components/core/environment";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import * as SecureStore from 'expo-secure-store';
 import { useState } from "react";
 import {
     Alert,
@@ -18,7 +19,6 @@ import {
 const AgregarClienteScreen = () => {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
-
     const [nombres, setNombres] = useState('');
     const [apellidos, setApellidos] = useState('');
     const [tipoIdentificacion, setTipoIdentificacion] = useState('');
@@ -27,6 +27,8 @@ const AgregarClienteScreen = () => {
     const [lineaCredito, setLineaCredito] = useState('');
     const [numeroOperacion, setNumeroOperacion] = useState('');
     const [codigoCedente, setCodigoCedente] = useState('');
+
+
 
     const validarFormulario = (): boolean => {
         if (!nombres.trim()) {
@@ -68,6 +70,41 @@ const AgregarClienteScreen = () => {
         const esPaisValido = environment.pais in validarIdentificacionPorPais;
         const esDniValido = identificacionValida.length === validarIdentificacionPorPais[environment.pais];
         const esNumeroOperacionValido = numeroOperacionValida.length >= 6 && numeroOperacionValida.length <= 16;
+
+        if (!esPaisValido) {
+            showErrorToast('Error', 'País seleccionado no es válido');
+            return;
+        }
+
+        if (environment.pais === 'PE' || environment.pais === 'EC') {
+            if (!esDniValido) {
+                showErrorToast('Error', `La identificación debe tener 8 dígitos para ${environment.pais}`);
+                return;
+            }
+            if (!esNumeroOperacionValido) {
+                showErrorToast('Error', `El número de operación debe tener entre 6 y 16 dígitos para ${environment.pais}`);
+                return;
+            }
+        }
+
+        if (environment.pais === 'GT') {
+            if (!esDniValido) {
+                showErrorToast('Error', `La identificación debe tener 13 dígitos para ${environment.pais}`);
+                return;
+            }
+            if (!agencia) {
+                showErrorToast('Error', 'Debe seleccionar una agencia.');
+                return;
+            }
+            if (!lineaCredito) {
+                showErrorToast('Error', 'Debe seleccionar una línea de crédito.');
+                return;
+            }
+        }
+
+        //Obtener datos de la sesion
+        const dataUser = await SecureStore.getItemAsync('DataUser');
+        const datosRecuperados = JSON.parse(dataUser || '{}');
 
         try {
             setLoading(true);
