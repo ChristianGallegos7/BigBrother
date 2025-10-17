@@ -1,3 +1,4 @@
+import { environment } from "@/components/core/environment";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -17,8 +18,7 @@ import {
 const AgregarClienteScreen = () => {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
-    
-    // Estados para los campos del formulario
+
     const [nombres, setNombres] = useState('');
     const [apellidos, setApellidos] = useState('');
     const [tipoIdentificacion, setTipoIdentificacion] = useState('');
@@ -37,6 +37,7 @@ const AgregarClienteScreen = () => {
             showErrorToast('Error', 'La identificación es obligatoria');
             return false;
         }
+
         return true;
     };
 
@@ -56,9 +57,21 @@ const AgregarClienteScreen = () => {
             return;
         }
 
+        const validarIdentificacionPorPais: any = {
+            PE: 8,
+            EC: 10,
+            GT: 13,
+        }
+
+        const identificacionValida = identificacion.replace(/\s/g, '').replace(/\D/g, '');
+        const numeroOperacionValida = numeroOperacion.replace(/\s/g, '').replace(/\D/g, '');
+        const esPaisValido = environment.pais in validarIdentificacionPorPais;
+        const esDniValido = identificacionValida.length === validarIdentificacionPorPais[environment.pais];
+        const esNumeroOperacionValido = numeroOperacionValida.length >= 6 && numeroOperacionValida.length <= 16;
+
         try {
             setLoading(true);
-            
+
             // TODO: Aquí debes llamar a tu función de backend para guardar el cliente
             // Ejemplo:
             // const nuevoCliente = {
@@ -79,7 +92,7 @@ const AgregarClienteScreen = () => {
 
             showSuccessToast('Éxito', 'Cliente agregado correctamente');
             limpiarFormulario();
-            
+
             // Regresar a la lista de clientes
             setTimeout(() => {
                 router.back();
