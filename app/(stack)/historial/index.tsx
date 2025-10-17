@@ -12,7 +12,6 @@ const audios = [
 
 const audiosPendientes = audios.filter(a => !a.uploaded).length;
 
-// --- COMPONENTE DE UN ÍTEM DE AUDIO (Tarjeta) ---
 const AudioItem = ({ item }: { item: typeof audios[0] }) => {
     const isPending = !item.uploaded;
 
@@ -22,7 +21,6 @@ const AudioItem = ({ item }: { item: typeof audios[0] }) => {
 
     return (
         <View style={styles.card}>
-            {/* Sección de Ícono y Nombre */}
             <View style={styles.cardHeader}>
                 <Ionicons
                     name={isPending ? "alert-circle" : "checkmark-circle"}
@@ -35,7 +33,6 @@ const AudioItem = ({ item }: { item: typeof audios[0] }) => {
                 </Text>
             </View>
 
-            {/* Sección de Detalles y Acciones */}
             <View style={styles.detailsAndActions}>
                 <View style={styles.detailsColumn}>
 
@@ -57,12 +54,10 @@ const AudioItem = ({ item }: { item: typeof audios[0] }) => {
                     </View>
                 </View>
 
-                {/* Botones de Acción (Play/Eliminar) */}
                 <View style={styles.cardActions}>
                     <Pressable onPress={handlePlay} style={styles.playButtonSmall}>
                         <Ionicons name="play" size={20} color="white" />
                     </Pressable>
-                    {/* El botón de eliminar se muestra solo si no ha sido enviado */}
                     {isPending && (
                         <Pressable onPress={() => console.log('Eliminar', item.id)} style={styles.deleteButtonSmall}>
                             <MaterialIcons name="delete" size={20} color="#fff" />
@@ -74,7 +69,6 @@ const AudioItem = ({ item }: { item: typeof audios[0] }) => {
     );
 };
 
-// --- COMPONENTE PRINCIPAL ---
 const HistorialScreen = () => {
     const EnviarAudios = () => {
         console.log("Enviar Audios pendientes");

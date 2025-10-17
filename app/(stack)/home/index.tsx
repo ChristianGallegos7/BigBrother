@@ -3,11 +3,12 @@ import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as FileSystem from 'expo-file-system';
+import * as Location from 'expo-location';
 import { useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from "react";
-import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import {
     Directory,
@@ -31,6 +32,50 @@ interface ClientData {
     NumeroOperacion?: string;
 }
 
+interface State {
+    isLoggingIn: boolean;
+    recordSecs: number;
+    recordTime: string;
+    currentPositionSec: number;
+    currentDurationSec: number;
+    playTime: string;
+    duration: string;
+    isPlaying: boolean;
+    audioFilePath: string;
+    permissionsRequested: boolean,
+    IDCliente: string,
+    isWaving: boolean,
+    recording: boolean
+    audioDataAudio: any,
+    audioData: any,
+    //
+    modalVisible: boolean
+    DNI: string
+    NumeroOperacion: string
+    Agencia: string
+    LineaCredito: string
+    //
+    snack: boolean
+    numGrabacion: number
+    isError: boolean;
+    receivedData: any,
+    //data: any
+    selectedItem: any
+    unsubscribeNetInfo: any
+    isLoading: boolean;
+    latitude: any,
+    longitude: any,
+    windowDimensions: any,
+    isSmallScreen: boolean,
+    UES: any,
+    isPaused: boolean;
+    localClientId: string,
+    IdGrabacionReal?: string | number, // <-- Added property
+    lastFailedAudio?: any, // <-- Added property to fix error
+    snackMessage?: string
+}
+
+
 const HomeScreen = () => {
     const router = useRouter();
     const [userName, setUserName] = useState<string>('Usuario');
@@ -41,6 +86,13 @@ const HomeScreen = () => {
     const [recording, setRecording] = useState<Audio.Recording | undefined>();
     const [recordedUri, setRecordedUri] = useState<string | null>(null);
     const [isPaused, setIsPaused] = useState(false);
+    const [audioFilePath, setAudioFilePath] = useState<string | null>(null);
+    const [latitude, setLatitude] = useState<number>(0);
+    const [longitude, setLongitude] = useState<number>(0);
+    const [isConnected, setIsConnected] = useState<boolean>(true);
+    const [idGrabacionReal, setIdGrabacionReal] = useState<number | null>(null);
+
+
 
     useEffect(() => {
         loadUserData();
@@ -58,14 +110,19 @@ const HomeScreen = () => {
         return () => clearInterval(interval);
     }, [isRecording]);
 
-    const requestMicrophonePermission = async () => {
+
+
+    const requestMicrophonePermission = async (): Promise<boolean> => {
         try {
             const { status } = await Audio.requestPermissionsAsync();
             if (status !== 'granted') {
                 console.log('Permiso de micrófono denegado');
+                return false;
             }
+            return true;
         } catch (error) {
             console.error('Error al solicitar permisos de audio:', error);
+            return false;
         }
     };
 
@@ -106,6 +163,29 @@ const HomeScreen = () => {
         return flags[environment.pais] || flags['EC'];
     };
 
+    // Generar nombre único para archivo de audio
+    const generateUniqueFileName = (prefix: string = 'audio'): string => {
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substring(2, 9);
+        return `${prefix}_${timestamp}_${random}.m4a`;
+    };
+
+    // Generar path completo para el audio
+    const generateAudioPath = async (): Promise<string> => {
+        // Usar Paths.document de la nueva API
+        const baseDirectory = Paths.document;
+        const appFolder = new Directory(baseDirectory, "BigBrother");
+        const audiosDirectory = new Directory(appFolder, "Audios");
+
+        // Crear el directorio si no existe
+        if (!(await getInfoAsync(audiosDirectory.uri)).exists) {
+            await audiosDirectory.create({ intermediates: true });
+        }
+
+        const fileName = generateUniqueFileName('audio');
+        return `${audiosDirectory.uri}${fileName}`;
+    };
+
     const handlePlayPause = () => {
         if (!recording) {
             startRecording();
@@ -114,19 +194,64 @@ const HomeScreen = () => {
         }
     };
 
+    const getCurrentPosition = async () => {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+            console.log('Permiso de ubicación denegado');
+            return null;
+        }
+
+        const position = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+        });
+
+        return position;
+    };
+    // Empezar la grabacion
     const startRecording = async () => {
         setRecordedUri(null);
-
         try {
+            const hayPermisos = await requestMicrophonePermission();
+            if (!hayPermisos) {
+                console.log("Permisos de micrófono no concedidos");
+                return;
+            }
+
+            // Generar path para el audio antes de grabar
+            const path = await generateAudioPath();
+            setAudioFilePath(path);
+            console.log('📁 Path de grabación generado:', path);
+
             await Audio.setAudioModeAsync({
                 allowsRecordingIOS: true,
                 playsInSilentModeIOS: true,
             });
             const { recording: newRecording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-
             setRecording(newRecording);
             setIsRecording(true);
             setRecordingTime(0);
+
+            let latitude = 0;
+            let longitude = 0;
+
+            try {
+                const position = await getCurrentPosition();
+                latitude = position?.coords.latitude || 0;
+                longitude = position?.coords.longitude || 0;
+
+            } catch (error) {
+                console.warn('⚠️ No se pudo obtener la ubicación:', error);
+
+            }
+
+            try {
+                // const grabacionResult = await IniciarGrabacion()
+            } catch (error) {
+                
+            }
+
+
+
 
         } catch (error) {
             console.error('Failed to start recording', error);
@@ -136,6 +261,7 @@ const HomeScreen = () => {
     }
 
     const stopRecording = async () => {
+
         if (!recording) return;
         setIsRecording(false);
         setIsSendingAudio(true);
@@ -149,7 +275,6 @@ const HomeScreen = () => {
             });
 
             setRecordedUri(uri);
-            console.log('Recording stopped and stored at', uri);
 
             if (uri) {
                 const savedPath = await saveAudioToStorage(uri);
@@ -158,22 +283,6 @@ const HomeScreen = () => {
                     showSuccessToast(
                         'Audio Guardado',
                         `Duración: ${formatTime(recordingTime)}\nGuardado en: ${savedPath}`
-                    );
-
-                    // Mostrar opciones
-                    Alert.alert(
-                        'Audio Guardado',
-                        `Duración: ${formatTime(recordingTime)}\n\nArchivo guardado en:\n${savedPath}`,
-                        [
-                            {
-                                text: 'OK',
-                                style: 'default'
-                            },
-                            {
-                                text: 'Enviar',
-                                onPress: () => handleSendAudio(savedPath)
-                            }
-                        ]
                     );
                 }
             }
@@ -343,7 +452,7 @@ const HomeScreen = () => {
 
                     <View style={styles.actionButtons}>
                         <TouchableOpacity style={styles.actionButton}
-                        onPress={() => router.push('/listaclientes')}
+                            onPress={() => router.push('/listaclientes')}
                         >
                             <Ionicons name="list" size={25} color="#1a56db" />
                             <Text style={styles.actionButtonText}>Lista</Text>
@@ -419,7 +528,7 @@ const HomeScreen = () => {
                     <Text style={styles.versionText}>Version: {environment.version}</Text>
                 </ScrollView>
 
-                
+
             </View>
         </SafeAreaView>
     );

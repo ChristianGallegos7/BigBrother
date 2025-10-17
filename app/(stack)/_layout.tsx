@@ -39,6 +39,15 @@ const StackLayout = () => {
                     }}
                 />
 
+                <Stack.Screen
+                    name="agregarcliente/index"
+                    options={{
+                        headerShown: true,
+                        title: 'Agregar Cliente',
+                        presentation: 'card',
+                    }}
+                />
+
             </Stack>
             {showNav && <BottomNav />}
         </>
