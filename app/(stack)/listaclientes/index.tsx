@@ -81,20 +81,44 @@ const ListaClientesScreen = () => {
         }
     }
 
+    const handleClientePress = (item: Cliente) => {
+        // Navegar al home con los datos del cliente seleccionado
+        router.push({
+            pathname: '/(stack)/home',
+            params: {
+                clientData: JSON.stringify(item),
+                fromClientList: 'true'
+            }
+        });
+    };
+
     const renderItem = ({ item }: { item: Cliente }) => (
-        <View style={styles.itemContainer}>
-            <View style={styles.itemContent}>
-                <Text style={styles.nombre}>{item.Nombres}</Text>
-                <Text style={styles.identificacion}>ID: {item.Identificacion}</Text>
-                {item.NumeroOperacion && (
-                    <Text style={styles.operacion}>Op: {item.NumeroOperacion}</Text>
-                )}
-            </View>
-            <TouchableOpacity
-                style={styles.archivarButton}
-                onPress={() => archivarCliente(item)}
+        <View style={styles.itemWrapper}>
+            <TouchableOpacity 
+                style={styles.itemContainer}
+                onPress={() => handleClientePress(item)}
+                activeOpacity={0.7}
             >
-                <Ionicons name="archive-outline" size={24} color="#ff6b6b" />
+                <View style={styles.itemContent}>
+                    <View style={styles.nameRow}>
+                        <Text style={styles.nombre}>{`${item.Nombres + ' ' + item.Apellidos}`}</Text>
+                        <Ionicons name="chevron-forward" size={20} color="#007AFF" />
+                    </View>
+                    <Text style={styles.identificacion}>Tipo Identificación: {item.TipoIdentificacion}</Text>
+                    <Text style={styles.identificacion}>Identificación: {item.Identificacion}</Text>
+                    {item.NumeroOperacion && (
+                        <Text style={styles.operacion}>Número Operación: {item.NumeroOperacion}</Text>
+                    )}
+                </View>
+                <TouchableOpacity
+                    style={styles.archivarButton}
+                    onPress={(e) => {
+                        e.stopPropagation(); // Evitar que se active el click del item
+                        archivarCliente(item);
+                    }}
+                >
+                    <Ionicons name="archive-outline" size={24} color="#ff6b6b" />
+                </TouchableOpacity>
             </TouchableOpacity>
         </View>
     );
@@ -158,7 +182,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 16,
-        backgroundColor: '#fff',
+        backgroundColor: '#f5f5f5', // Fondo gris claro para contraste
     },
     searchContainer: {
         flexDirection: 'row',
@@ -183,23 +207,43 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         fontStyle: 'italic',
     },
+    itemWrapper: {
+        marginBottom: 12, // Espacio entre items
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3, // Sombra en Android
+    },
     itemContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderLeftWidth: 4,
+        borderLeftColor: '#007AFF', // Borde izquierdo azul para destacar
+        borderRadius: 12,
         backgroundColor: '#fff',
     },
     itemContent: {
         flex: 1,
     },
+    nameRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
     nombre: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 4,
+        flex: 1,
     },
     identificacion: {
         fontSize: 14,

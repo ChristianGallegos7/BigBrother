@@ -1,6 +1,6 @@
 import BottomNav from "@/components/BottomNav";
 import { Feather } from "@expo/vector-icons";
-import { Stack, useSegments } from "expo-router";
+import { router, Stack, useSegments } from "expo-router";
 import { TouchableOpacity } from "react-native";
 
 const StackLayout = () => {
@@ -32,7 +32,7 @@ const StackLayout = () => {
                         headerShown: true,
                         title: 'Lista de Clientes',
                         headerRight: () => (
-                            <TouchableOpacity onPress={() => {/* acción al presionar */ }} style={{ marginRight: 16 }}>
+                            <TouchableOpacity onPress={() =>  {router.push('/(stack)/agregarcliente')}} style={{ marginRight: 16 }}>
                                 <Feather name="plus" size={24} color="blue" />
                             </TouchableOpacity>
                         ),

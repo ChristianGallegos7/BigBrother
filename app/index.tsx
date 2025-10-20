@@ -1,6 +1,7 @@
 import { environment } from "@/components/core/environment";
 import { IniciarSesionApp, obtenerTokenAccesoBigBrother } from "@/components/core/miCore";
 import CustomLoading from "@/components/CustomLoading";
+import { useAuth } from "@/context/AuthContext";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -15,6 +16,7 @@ export default function LoginScreen() {
   const [pais, setPais] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { login } = useAuth(); // 👈 Importar el método login del contexto
 
   const handlePaisSelect = (pais: string) => {
     setPais(pais);
@@ -55,8 +57,12 @@ export default function LoginScreen() {
       } else if (resultData && typeof resultData === 'object' && 'UserName' in resultData) {
         // Login exitoso, resultData contiene los datos del usuario
         setLoading(false);
+        
+        // 👇 Guardar la sesión en el contexto
+        await login(tokenResponse.token, resultData);
+        
         showSuccessToast("¡Bienvenido!", `Hola ${resultData.UserName || user}`);
-        router.replace('/home');
+        router.replace('/(stack)/home');
       } else {
         // resultData es false u otro valor, hubo un error
         setLoading(false);

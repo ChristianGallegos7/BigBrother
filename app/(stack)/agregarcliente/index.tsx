@@ -1,9 +1,13 @@
 import { environment } from "@/components/core/environment";
+import { catalogosList, GrabarCliente } from "@/components/core/miCore";
+import { DetalleCatalogo } from "@/models/detalle-catalogo.interface";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
+import { guardarClienteLocalEnSQLite } from "@/utils/database/database";
 import { Ionicons } from "@expo/vector-icons";
+import * as Network from 'expo-network';
 import { useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Alert,
     KeyboardAvoidingView,
@@ -27,8 +31,35 @@ const AgregarClienteScreen = () => {
     const [lineaCredito, setLineaCredito] = useState('');
     const [numeroOperacion, setNumeroOperacion] = useState('');
     const [codigoCedente, setCodigoCedente] = useState('');
+    const [isOnline, setIsOnline] = useState(true);
+    const [agenciasArray, setAgenciasArray] = useState<string[]>([]);
+    const [lineasCreditoArray, setLineasCreditoArray] = useState<string[]>([]);
 
+    // 🌐 Detectar estado de conexión a Internet
+    useEffect(() => {
+        obtenerCatalogos();
+        let intervalId: ReturnType<typeof setInterval>;
 
+        const checkConnection = async () => {
+            try {
+                const networkState = await Network.getNetworkStateAsync();
+                setIsOnline(networkState.isConnected ?? false);
+            } catch (error) {
+                console.error('Error al verificar conexión:', error);
+                setIsOnline(false);
+            }
+        };
+
+        // Verificar conexión al montar el componente
+        checkConnection();
+
+        // Verificar cada 5 segundos
+        intervalId = setInterval(checkConnection, 5000);
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    }, []);
 
     const validarFormulario = (): boolean => {
         if (!nombres.trim()) {
@@ -109,35 +140,96 @@ const AgregarClienteScreen = () => {
         try {
             setLoading(true);
 
-            // TODO: Aquí debes llamar a tu función de backend para guardar el cliente
-            // Ejemplo:
-            // const nuevoCliente = {
-            //     Nombres: nombres,
-            //     Apellidos: apellidos,
-            //     TipoIdentificacion: tipoIdentificacion,
-            //     Identificacion: identificacion,
-            //     Agencia: agencia,
-            //     LineaCredito: lineaCredito,
-            //     NumeroOperacion: numeroOperacion,
-            //     CodigoCedente: codigoCedente,
-            //     FechaCarga: new Date().toISOString()
-            // };
-            // await GuardarCliente(nuevoCliente);
+            // Limpiar identificación y número de operación
+            const cleanedDNI = identificacion.replace(/\s/g, '').replace(/\D/g, '');
+            const cleanedNumeroOperacion = numeroOperacion.replace(/\s/g, '').replace(/\D/g, '');
 
-            // Simulación de guardado (remover cuando implementes la función real)
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Armar el objeto con el formato del backend
+            const clienteData = {
+                Apellidos: apellidos,
+                CodigoCedente: codigoCedente || 'MANUAL',
+                DatosAdicionales: null,
+                FechaCarga: new Date().toISOString(),
+                Fuente: 'BIGBROTHER',
+                IdClienteCarga: 0,
+                IdExterno: null,
+                Identificacion: cleanedDNI,
+                Nombres: nombres,
+                NumeroOperacion: cleanedNumeroOperacion,
+                TieneGrabacion: false,
+                Agencia: agencia || '',
+                LineaCredito: lineaCredito || '',
+                TipoIdentificacion: 'CED',
+                UsuarioAsignacion: datosRecuperados?.UserName || ''
+            };
 
-            showSuccessToast('Éxito', 'Cliente agregado correctamente');
-            limpiarFormulario();
+            console.log('📤 Preparando guardado del cliente...');
+            console.log('🌐 Estado de conexión:', isOnline ? 'Online' : 'Offline');
 
-            // Regresar a la lista de clientes
-            setTimeout(() => {
-                router.back();
-            }, 500);
+            // Intentar guardar según la conexión
+            try {
+                if (isOnline) {
+                    // 🌐 MODO ONLINE: Guardar en el servidor
+                    console.log('📡 Guardando en servidor...');
+                    const resultado = await GrabarCliente(clienteData);
 
-        } catch (error) {
-            console.error('Error al guardar cliente:', error);
-            showErrorToast('Error', 'No se pudo guardar el cliente');
+                    if (!resultado) {
+                        throw new Error('No se pudo guardar el cliente en el servidor');
+                    }
+
+                    console.log('✅ Cliente guardado exitosamente en servidor:', resultado);
+                    showSuccessToast('Éxito', 'Cliente agregado correctamente');
+                    limpiarFormulario();
+
+                    // Navegar al home y pasar los datos del cliente guardado
+                    setTimeout(() => {
+                        router.push({
+                            pathname: '/(stack)/home',
+                            params: {
+                                clientData: JSON.stringify(resultado || clienteData),
+                                fromAddClient: 'true'
+                            }
+                        });
+                    }, 500);
+                } else {
+                    // 📱 MODO OFFLINE: Sin conexión, intentar guardar localmente
+                    throw new Error('Sin conexión a Internet');
+                }
+            } catch (error: any) {
+                console.warn(`⚠️ Error al guardar en servidor (${environment.pais}):`, error.message);
+
+                // Intentar guardar localmente en SQLite
+                try {
+                    console.log('💾 Guardando localmente en SQLite...');
+                    await guardarClienteLocalEnSQLite(clienteData);
+
+                    console.log('✅ Cliente guardado localmente');
+                    showSuccessToast(
+                        'Guardado Local',
+                        'Cliente guardado localmente. Se sincronizará cuando haya conexión.'
+                    );
+                    limpiarFormulario();
+
+                    // Navegar al home y pasar los datos del cliente guardado localmente
+                    setTimeout(() => {
+                        router.push({
+                            pathname: '/(stack)/home',
+                            params: {
+                                clientData: JSON.stringify(clienteData),
+                                fromAddClient: 'true',
+                                savedLocally: 'true'
+                            }
+                        });
+                    }, 500);
+                } catch (localError: any) {
+                    console.error('❌ Error al guardar localmente:', localError);
+                    showErrorToast('Error', 'No se pudo guardar el cliente. Intente nuevamente.');
+                }
+            }
+
+        } catch (error: any) {
+            console.error('❌ Error general al guardar cliente:', error);
+            showErrorToast('Error', 'Ocurrió un error inesperado al guardar el cliente');
         } finally {
             setLoading(false);
         }
@@ -162,6 +254,39 @@ const AgregarClienteScreen = () => {
         }
     };
 
+    const obtenerCatalogos = async () => {
+        try {
+            console.log("Iniciando obtención de catálogos...");
+
+            let dataGT;
+            if (isOnline) {
+                dataGT = await catalogosList();
+                console.log("Catálogos obtenidos para guatemala:", dataGT);
+            } else {
+                const local = await SecureStore.getItem('DatosGT');
+                if (!local) {
+                    console.warn("No hay catálogos guardados localmente.");
+                    return;
+                }
+                dataGT = local;
+            }
+
+            if (dataGT) {
+                const parsedDataGT = typeof dataGT === 'string' ? JSON.parse(dataGT) : [];
+                const agencias = parsedDataGT.find((item: any) => item.NombreCatalogo === 'Agencias')?.DetalleCatalogos.map((detalle: DetalleCatalogo) => detalle.Descripcion) || [];
+
+                const lineasCredito = parsedDataGT.find((item: any) => item.NombreCatalogo === 'LineaCredito')?.DetalleCatalogos.map((detalle: DetalleCatalogo) => detalle.Descripcion) || [];
+
+                setAgenciasArray(agencias);
+                setLineasCreditoArray(lineasCredito);
+
+                console.log("Catálogos cargados correctamente.");
+            }
+        } catch (error) {
+            console.error("Error al obtener catálogos:", error);
+        }
+    }
+
     return (
         <KeyboardAvoidingView
             style={styles.container}
@@ -172,10 +297,23 @@ const AgregarClienteScreen = () => {
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
             >
+
                 <View style={styles.header}>
                     <Ionicons name="person-add" size={48} color="#007AFF" />
                     <Text style={styles.headerTitle}>Nuevo Cliente</Text>
                     <Text style={styles.headerSubtitle}>Ingresa los datos del cliente</Text>
+
+                    {/* 🌐 Indicador de conexión */}
+                    <View style={[styles.connectionBadge, isOnline ? styles.online : styles.offline]}>
+                        <Ionicons
+                            name={isOnline ? "wifi" : "wifi-outline"}
+                            size={14}
+                            color="#fff"
+                        />
+                        <Text style={styles.connectionText}>
+                            {isOnline ? 'Conectado' : 'Sin conexión'}
+                        </Text>
+                    </View>
                 </View>
 
                 <View style={styles.form}>
@@ -195,7 +333,9 @@ const AgregarClienteScreen = () => {
 
                     {/* Apellidos */}
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Apellidos</Text>
+                        <Text style={styles.label}>Apellidos
+                            <Text style={styles.required}>*</Text>
+                        </Text>
                         <TextInput
                             style={styles.input}
                             placeholder="Ingrese los apellidos"
@@ -205,18 +345,7 @@ const AgregarClienteScreen = () => {
                         />
                     </View>
 
-                    {/* Tipo de Identificación */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Tipo de Identificación</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Ej: DNI, Cédula, Pasaporte"
-                            value={tipoIdentificacion}
-                            onChangeText={setTipoIdentificacion}
-                            autoCapitalize="characters"
-                        />
-                    </View>
-
+                 
                     {/* Identificación - Obligatorio */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>
@@ -231,31 +360,41 @@ const AgregarClienteScreen = () => {
                         />
                     </View>
 
-                    {/* Agencia */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Agencia</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Nombre de la agencia"
-                            value={agencia}
-                            onChangeText={setAgencia}
-                        />
-                    </View>
+                    {/* Agencia - Solo para Guatemala */}
+                    {environment.pais === 'GT' && (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>
+                                Agencia <Text style={styles.required}>*</Text>
+                            </Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Nombre de la agencia"
+                                value={agencia}
+                                onChangeText={setAgencia}
+                            />
+                        </View>
+                    )}
 
-                    {/* Línea de Crédito */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Línea de Crédito</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Línea de crédito"
-                            value={lineaCredito}
-                            onChangeText={setLineaCredito}
-                        />
-                    </View>
+                    {/* Línea de Crédito - Solo para Guatemala */}
+                    {environment.pais === 'GT' && (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>
+                                Línea de Crédito <Text style={styles.required}>*</Text>
+                            </Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Línea de crédito"
+                                value={lineaCredito}
+                                onChangeText={setLineaCredito}
+                            />
+                        </View>
+                    )}
 
                     {/* Número de Operación */}
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Número de Operación</Text>
+                        <Text style={styles.label}>Número de Operación
+                            <Text style={styles.required}>*</Text>
+                        </Text>
                         <TextInput
                             style={styles.input}
                             placeholder="Número de operación"
@@ -264,23 +403,10 @@ const AgregarClienteScreen = () => {
                         />
                     </View>
 
-                    {/* Código Cedente */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Código Cedente</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Código cedente"
-                            value={codigoCedente}
-                            onChangeText={setCodigoCedente}
-                        />
-                    </View>
+
                 </View>
 
-                <View style={styles.footer}>
-                    <Text style={styles.footerNote}>
-                        Los campos marcados con <Text style={styles.required}>*</Text> son obligatorios
-                    </Text>
-                </View>
+               
             </ScrollView>
 
             {/* Botones de acción fijos en la parte inferior */}
@@ -338,6 +464,26 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         marginTop: 4,
+    },
+    connectionBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        marginTop: 12,
+        gap: 6,
+    },
+    online: {
+        backgroundColor: '#34C759',
+    },
+    offline: {
+        backgroundColor: '#FF3B30',
+    },
+    connectionText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '600',
     },
     form: {
         padding: 16,

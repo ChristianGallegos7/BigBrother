@@ -4,10 +4,10 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as FileSystem from 'expo-file-system';
 import * as Location from 'expo-location';
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import {
@@ -78,6 +78,8 @@ interface State {
 
 const HomeScreen = () => {
     const router = useRouter();
+    const params = useLocalSearchParams();
+    const hasLoadedParams = useRef(false);
     const [userName, setUserName] = useState<string>('Usuario');
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [isRecording, setIsRecording] = useState(false);
@@ -98,7 +100,81 @@ const HomeScreen = () => {
         loadUserData();
         loadClientData();
         requestMicrophonePermission();
+
+        // Resetear el ref cuando se carga el componente sin params
+        if (!params.clientData) {
+            hasLoadedParams.current = false;
+        }
     }, []);
+
+    // 👇 Detectar cuando se pasan datos del cliente (desde AgregarCliente o ListaClientes)
+    useEffect(() => {
+        // Evitar procesamiento múltiple
+        if (hasLoadedParams.current) return;
+
+        // Desde AgregarCliente
+        if (params.clientData && params.fromAddClient === 'true') {
+            hasLoadedParams.current = true;
+            try {
+                const newClientData = JSON.parse(params.clientData as string);
+                console.log('📥 Cliente recibido desde AgregarCliente:', newClientData);
+
+                // Formatear los datos para mostrar
+                setClientData({
+                    Nombre: `${newClientData.Nombres || ''} ${newClientData.Apellidos || ''}`.trim(),
+                    Identificacion: newClientData.Identificacion || '',
+                    CodigoCedente: newClientData.CodigoCedente || 'MANUAL',
+                    NumeroOperacion: newClientData.NumeroOperacion || ''
+                });
+
+                // Mostrar mensaje si fue guardado localmente
+                setTimeout(() => {
+                    if (params.savedLocally === 'true') {
+                        showSuccessToast(
+                            'Cliente Cargado',
+                            'Mostrando cliente guardado localmente'
+                        );
+                    } else {
+                        showSuccessToast(
+                            'Cliente Cargado',
+                            'Cliente guardado en servidor y listo para grabar'
+                        );
+                    }
+                }, 300);
+            } catch (error) {
+                console.error('Error al parsear clientData:', error);
+                hasLoadedParams.current = false;
+            }
+            return;
+        }
+
+        // Desde ListaClientes
+        if (params.clientData && params.fromClientList === 'true') {
+            hasLoadedParams.current = true;
+            try {
+                const selectedClient = JSON.parse(params.clientData as string);
+                console.log('📥 Cliente seleccionado desde ListaClientes:', selectedClient);
+
+                // Formatear los datos para mostrar
+                setClientData({
+                    Nombre: `${selectedClient.Nombres || ''} ${selectedClient.Apellidos || ''}`.trim(),
+                    Identificacion: selectedClient.Identificacion || '',
+                    CodigoCedente: selectedClient.CodigoCedente || 'MANUAL',
+                    NumeroOperacion: selectedClient.NumeroOperacion || ''
+                });
+
+                setTimeout(() => {
+                    showSuccessToast(
+                        'Cliente Seleccionado',
+                        'Listo para iniciar grabación'
+                    );
+                }, 300);
+            } catch (error) {
+                console.error('Error al parsear clientData desde lista:', error);
+                hasLoadedParams.current = false;
+            }
+        }
+    }, [params.clientData, params.fromAddClient, params.fromClientList, params.savedLocally]);
 
     useEffect(() => {
         let interval: any;
@@ -140,10 +216,10 @@ const HomeScreen = () => {
 
     const loadClientData = async () => {
         setClientData({
-            Nombre: 'MONSERRATE ELIZABETH VELEZ CEDEÑO',
-            Identificacion: '1313939744',
-            CodigoCedente: 'SOLIDARIO',
-            NumeroOperacion: '849940'
+            Nombre: '',
+            Identificacion: '',
+            CodigoCedente: '',
+            NumeroOperacion: ''
         });
     };
 
@@ -247,7 +323,7 @@ const HomeScreen = () => {
             try {
                 // const grabacionResult = await IniciarGrabacion()
             } catch (error) {
-                
+
             }
 
 
@@ -457,7 +533,9 @@ const HomeScreen = () => {
                             <Ionicons name="list" size={25} color="#1a56db" />
                             <Text style={styles.actionButtonText}>Lista</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionButton}>
+                        <TouchableOpacity style={styles.actionButton}
+                        onPress={() => router.navigate('/agregarcliente')}
+                        >
                             <Ionicons name="person-add" size={25} color="#1a56db" />
                             <Text style={styles.actionButtonText}>Añadir</Text>
                         </TouchableOpacity>
