@@ -1,10 +1,10 @@
 import { environment } from "@/components/core/environment";
 import { catalogosList, GrabarCliente } from "@/components/core/miCore";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { DetalleCatalogo } from "@/models/detalle-catalogo.interface";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
 import { guardarClienteLocalEnSQLite } from "@/utils/database/database";
 import { Ionicons } from "@expo/vector-icons";
-import * as Network from 'expo-network';
 import { useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from "react";
@@ -22,6 +22,7 @@ import {
 
 const AgregarClienteScreen = () => {
     const router = useRouter();
+    const { isOnline } = useNetworkStatus(); // 👈 Usar el hook global
     const [loading, setLoading] = useState(false);
     const [nombres, setNombres] = useState('');
     const [apellidos, setApellidos] = useState('');
@@ -31,34 +32,12 @@ const AgregarClienteScreen = () => {
     const [lineaCredito, setLineaCredito] = useState('');
     const [numeroOperacion, setNumeroOperacion] = useState('');
     const [codigoCedente, setCodigoCedente] = useState('');
-    const [isOnline, setIsOnline] = useState(true);
     const [agenciasArray, setAgenciasArray] = useState<string[]>([]);
     const [lineasCreditoArray, setLineasCreditoArray] = useState<string[]>([]);
 
-    // 🌐 Detectar estado de conexión a Internet
+    // 🌐 Obtener catálogos al montar el componente
     useEffect(() => {
         obtenerCatalogos();
-        let intervalId: ReturnType<typeof setInterval>;
-
-        const checkConnection = async () => {
-            try {
-                const networkState = await Network.getNetworkStateAsync();
-                setIsOnline(networkState.isConnected ?? false);
-            } catch (error) {
-                console.error('Error al verificar conexión:', error);
-                setIsOnline(false);
-            }
-        };
-
-        // Verificar conexión al montar el componente
-        checkConnection();
-
-        // Verificar cada 5 segundos
-        intervalId = setInterval(checkConnection, 5000);
-
-        return () => {
-            clearInterval(intervalId);
-        };
     }, []);
 
     const validarFormulario = (): boolean => {

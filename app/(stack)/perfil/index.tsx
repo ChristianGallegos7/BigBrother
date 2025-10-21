@@ -2,6 +2,8 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 // Importamos los íconos de la librería que usa la app original
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import * as SecureStore from 'expo-secure-store';
+import { useEffect, useState } from "react";
 
 // --- Subcomponente para cada opción de menú (Tarjeta) ---
 interface ProfileOptionProps {
@@ -10,6 +12,11 @@ interface ProfileOptionProps {
     title: string;
     description: string;
     onPress: () => void;
+}
+
+interface UserData {
+    UserName?: string;
+    IdUsuario?: number;
 }
 
 const ProfileOption = ({ iconName, iconLibrary, title, description, onPress }: ProfileOptionProps) => {
@@ -33,15 +40,35 @@ const ProfileOption = ({ iconName, iconLibrary, title, description, onPress }: P
     );
 }
 
+
+
 const PerfilScreen = () => {
     // Datos de ejemplo para el estado del dispositivo
     const batteryLevel = "77.00%";
     const storageFree = "402.72 GB";
     const cacheSize = "12.69 KB / 0.01 MB";
+    const [userName, setUserName] = useState<string>('Usuario');
 
     const handleLogout = () => {
         console.log("Cerrar Sesión Presionado");
         // Lógica de cerrar sesión aquí
+    };
+
+    useEffect(() => {
+        loadUserData();
+    }, []);
+
+
+    const loadUserData = async () => {
+        try {
+            const userData = await SecureStore.getItem('DataUser');
+            if (userData) {
+                const parsed: UserData = JSON.parse(userData);
+                setUserName(parsed.UserName || 'Usuario');
+            }
+        } catch (error) {
+            console.error('Error loading user data:', error);
+        }
     };
 
     return (
@@ -56,7 +83,7 @@ const PerfilScreen = () => {
                     <View style={styles.userInfoCard}>
                         <Image source={require("../../../assets/images/Logos/logo.png")} style={styles.logo} />
                         <View style={{ justifyContent: "center" }}>
-                            <Text style={styles.nombre}>ALEX ERAZO</Text>
+                            <Text style={styles.nombre}> {userName} </Text>
                             <Text style={styles.rol}>Administrador General de SiCobra</Text>
                         </View>
                     </View>

@@ -772,35 +772,66 @@ async function eliminarCuenta(): Promise<string> {
 }
 
 async function subirAudioNube(audioFilePath: string, pais: string, folder = 'audios') {
-  const fileName = `audio_${Date.now()}.mp3`;
-  const fsPath = audioFilePath.replace('file://', '');
-  const uri = Platform.OS === 'android' ? 'file://' + fsPath : fsPath;
+  // Detectar extensión real
+  let extension = 'm4a';
+  let match = audioFilePath.match(/\.([a-zA-Z0-9]+)$/);
+  if (match && match[1]) {
+    extension = match[1].toLowerCase();
+  }
+  const fileName = `audio_${Date.now()}.${extension}`;
+  let uri = audioFilePath;
+  // Determinar MIME type
+  let mimeType =
+    extension === 'mp3' ? 'audio/mpeg'
+    : extension === 'wav' ? 'audio/wav'
+    : extension === 'aac' ? 'audio/aac'
+    : extension === 'ogg' ? 'audio/ogg'
+    : extension === 'm4a' ? 'audio/mp4'
+    : 'application/octet-stream';
+  try {
+    // Manejo especial para content:// en Android
+    if (Platform.OS === 'android' && uri.startsWith('content://')) {
+  const FileSystem = require('expo-file-system/legacy');
+      const tempPath = FileSystem.cacheDirectory + fileName;
+      await FileSystem.copyAsync({ from: uri, to: tempPath });
+      uri = tempPath;
+      console.log('Archivo copiado a temporal para upload:', uri);
+    }
 
-  const formData = new FormData();
-  formData.append('archivo', {
-    uri,
-    name: fileName,
-    type: 'audio/mpeg', // o 'audio/mp3'
-  } as any);
-  formData.append('folder', folder);
-  formData.append('pais', pais);
+    const formData = new FormData();
+    formData.append('archivo', {
+      uri,
+      name: fileName,
+      type: mimeType,
+    } as any);
+    formData.append('folder', folder);
+    formData.append('pais', pais);
 
-  const token = await SecureStore.getItem('Tokenbb');
-  const urlApi = obtenerUrlApi();
+    const token = await SecureStore.getItem('Tokenbb');
+    const urlApi = obtenerUrlApi();
 
-  const response = await fetch(`${urlApi}/Files/subirArchivoNube`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      // ¡NO pongas Content-Type aquí!
-    },
-    body: formData,
-  });
+    const response = await fetch(`${urlApi}/Files/subirAudioDirecto`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        // ¡NO pongas Content-Type aquí!
+      },
+      body: formData,
+    });
 
-  const json = await response.json();
-  // tu servidor devuelve { nombreArchivo, url } en camelCase si usas IActionResult;
-  // si sigues con Json.NET por defecto, será { NombreArchivo, Url }:
-  return json.Url ?? json.url;
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('Error al subir archivo a la nube:', response.status, text);
+      throw new Error(`Error al subir archivo: ${response.status}`);
+    }
+
+    const json = await response.json();
+    console.log('Respuesta de subirArchivoNube:', json);
+    return json.Url ?? json.url;
+  } catch (err) {
+    console.error('subirAudioNube error:', err);
+    throw err;
+  }
 }
 
 
@@ -812,19 +843,16 @@ async function DetenerGrabacion(
   Longitud?: string
 ) {
   try {
+
     const sesionUsuario: any = await SecureStore.getItem('SesionUsuario');
     const datosRecuperados = JSON.parse(sesionUsuario);
     const IDString: any = await SecureStore.getItem('IdGrabacion');
     const ID = parseInt(IDString, 10);
-    console.log('ID Grabacion:', ID);
 
     const token = await SecureStore.getItem('Tokenbb');
     if (!token) throw new Error('No se encontró un token de acceso.');
 
-    // 🆕 Subir el archivo a la nube primero
     const urlArchivo = await subirAudioNube(audioFilePath, environment.pais);
-
-    console.log('URL del audio subida a la nube:', urlArchivo);
 
     const sesionPayload = JSON.stringify({
       Pais: environment.pais,
@@ -835,7 +863,6 @@ async function DetenerGrabacion(
 
     const sesionEncoded = Buffer.from(sesionPayload).toString('base64');
 
-
     const headers = {
       Authorization: `Bearer ${token}`,
       Sesion: sesionEncoded,
@@ -843,12 +870,11 @@ async function DetenerGrabacion(
     };
 
     if (!Latitud) {
-      Latitud = '0'
-    };
-
+      Latitud = '0';
+    }
     if (!Longitud) {
-      Longitud = '0'
-    };
+      Longitud = '0';
+    }
 
     const data = {
       IdGrabacion: ID,
@@ -859,21 +885,34 @@ async function DetenerGrabacion(
       FechaFinGrabacion: FechaFinGrabacion,
     };
 
-    console.log('Data enviada a detenerGrabacion:', data);
-
     const urlApi = obtenerUrlApi();
-    const response = await httpRequest({ url: `${urlApi}/Grabacion/detenerGrabacion`, method: "POST", headers, body: data });
+    const endpoint = `${urlApi}/Grabacion/detenerGrabacion`;
 
+    const response = await httpRequest({ url: endpoint, method: "POST", headers, body: data });
+
+    // Parse response.data if it's a string
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        responseData = JSON.parse(responseData);
+      } catch (e) {
+        console.warn('No se pudo parsear la respuesta:', responseData);
+      }
+    } else {
+    }
 
     if (response.status === 200) {
+      console.log('DetenerGrabacion: ÉXITO, eliminando IdGrabacion y UES');
       await SecureStore.deleteItemAsync('IdGrabacion');
       await SecureStore.deleteItemAsync('UES');
-      return response.data;
+      console.log('DetenerGrabacion: FIN OK');
+      return responseData;
     } else {
+      console.warn('DetenerGrabacion: respuesta no 200', response.status, responseData);
       return null;
     }
   } catch (error: any) {
-    console.error('Error al detener grabación:', error);
+    console.error('DetenerGrabacion: ERROR', error?.message || error);
     return null;
   }
 }

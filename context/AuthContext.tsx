@@ -1,5 +1,6 @@
 // En: context/AuthContext.tsx
 
+import { createClientesTable, createGrabacionesTable, createListaClientesTable, getDBConnection } from '@/utils/database/database';
 import { useRouter, useSegments } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -54,6 +55,14 @@ export const AuthProvider = ({ children }: any) => {
     useEffect(() => {
         const loadSession = async () => {
             try {
+                // 🗄️ Inicializar base de datos
+                console.log('🗄️ Inicializando base de datos...');
+                const db = await getDBConnection();
+                await createClientesTable(db);
+                await createGrabacionesTable(db);
+                await createListaClientesTable(db);
+                console.log('✅ Tablas de base de datos inicializadas');
+
                 const token = await SecureStore.getItemAsync('Tokenbb');
                 const userString = await SecureStore.getItemAsync('userData'); // Lee el string
 
