@@ -1,5 +1,5 @@
 import { environment } from "@/components/core/environment";
-import { DetenerGrabacion, IniciarGrabacion } from "@/components/core/miCore";
+import { DetenerGrabacion, IniciarGrabacion, RegistroGrabacion, RegistroGrabacionGT } from "@/components/core/miCore";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
 import { getDBConnection, guardarClienteLocalEnSQLite, guardarGrabacionOfflineEnSQLite } from "@/utils/database/database";
@@ -257,12 +257,19 @@ const HomeScreen = () => {
                 return;
             }
 
-            // 2. ✅ Generar path para el audio antes de grabar
+            // 2. ✅ Validar que hay cliente seleccionado (ANTES de grabar)
+            if (!clientData || !clientData.Identificacion) {
+                console.warn('⚠️ Cliente no seleccionado o sin Identificación.');
+                Alert.alert('Error', 'Debes seleccionar un cliente antes de grabar.');
+                return;
+            }
+
+            // 3. ✅ Generar path para el audio antes de grabar
             const path = await generateAudioPath();
             setAudioFilePath(path);
             console.log('📁 Path de grabación generado:', path);
 
-            // 3. ✅ Verificar que el archivo se pueda crear
+            // 4. ✅ Verificar que el archivo se pueda crear
             await Audio.setAudioModeAsync({
                 allowsRecordingIOS: true,
                 playsInSilentModeIOS: true,
@@ -277,7 +284,7 @@ const HomeScreen = () => {
 
             console.log('✅ Grabación iniciada en:', path);
 
-            // 4. ✅ Obtener geolocalización con manejo de errores
+            // 5. ✅ Obtener geolocalización con manejo de errores
             let latitude = 0;
             let longitude = 0;
 
@@ -293,16 +300,6 @@ const HomeScreen = () => {
             } catch (geoError) {
                 console.warn('⚠️ No se pudo obtener la ubicación:', geoError);
                 Alert.alert('Advertencia', 'No fue posible obtener la ubicación. Se continuará sin ubicación.');
-            }
-
-            // 5. ✅ Validar que hay cliente seleccionado
-            if (!clientData || !clientData.Identificacion) {
-                console.warn('⚠️ Cliente no seleccionado o sin Identificación.');
-                Alert.alert('Error', 'Debes seleccionar un cliente antes de grabar.');
-                await newRecording.stopAndUnloadAsync();
-                setRecording(undefined);
-                setIsRecording(false);
-                return;
             }
 
             // 6. ✅ Obtener datos de usuario
@@ -361,7 +358,7 @@ const HomeScreen = () => {
             try {
                 console.log('🌐 Iniciando grabación en backend...');
                 const grabacionResult = await IniciarGrabacion(
-                    IdCliente,
+                    IdCliente ?? 0,
                     latitude,
                     longitude,
                     FechaInicioGrabacion
@@ -377,7 +374,7 @@ const HomeScreen = () => {
                     showSuccessToast('Grabación Iniciada', 'Grabación local iniciada.');
                 }
             } catch (serverErr: any) {
-                console.warn('🌐 No se pudo contactar al backend:', serverErr?.message || serverErr);
+                console.warn('🌐 No se pudo contactar al backend:', String(serverErr));
                 console.log('🌐 Grabación continuará en modo local.');
                 Alert.alert(
                     'Modo Local',
@@ -386,8 +383,8 @@ const HomeScreen = () => {
             }
 
         } catch (error: any) {
-            console.error('❌ Error general en startRecording:', error);
-            Alert.alert('Error', `No se pudo iniciar la grabación: ${error?.message || 'Error desconocido'}`);
+            console.error('❌ Error general en startRecording:', String(error));
+            Alert.alert('Error', `No se pudo iniciar la grabación: ${String(error) || 'Error desconocido'}`);
             setRecording(undefined);
             setIsRecording(false);
         }
@@ -502,6 +499,7 @@ const HomeScreen = () => {
                 });
 
                 let resultadoRegistro;
+                let validacion = false;
 
                 // Siempre intentar DetenerGrabacion primero
                 if (idGrabacionReal) {
@@ -513,29 +511,62 @@ const HomeScreen = () => {
                             Latitud,
                             Longitud
                         );
-
-                        const validacion = resultadoRegistro?.FechaFinGrabacion || resultadoRegistro?.UrlGrabacion;
-
-                        if (validacion) {
-                            console.log('✅ Grabación detenida exitosamente en backend');
-                            showSuccessToast(
-                                'Éxito',
-                                `Grabación enviada correctamente.\nDuración: ${formatTime(recordingTime)}`
-                            );
-                            resetRecordingState();
-                            return;
-                        } else {
-                            throw new Error('Respuesta inválida del servidor');
-                        }
-                    } catch (detenerError: any) {
-                        console.error('❌ Error en DetenerGrabacion:', detenerError?.message || detenerError);
-                        throw detenerError;
+                        validacion = resultadoRegistro?.FechaFinGrabacion || resultadoRegistro?.UrlGrabacion;
+                    } catch (detenerError) {
+                        console.error('❌ Error en DetenerGrabacion:', String(detenerError));
+                        validacion = false;
                     }
-                } else {
-                    throw new Error('No hay IdGrabacion para detener.');
                 }
-            } catch (onlineError: any) {
-                console.error('❌ Error durante envío ONLINE:', onlineError?.message || onlineError);
+
+                // Fallback: RegistroGrabacion/RegistroGrabacionGT si DetenerGrabacion falla
+                if (!validacion) {
+                    console.log(`🔁 Fallback → RegistroGrabacion${environment.pais}`);
+                    const idClienteStr = IdCliente !== undefined && IdCliente !== null ? String(IdCliente) : '';
+                    if (environment.pais === 'GT') {
+                        resultadoRegistro = await RegistroGrabacionGT(
+                            user,
+                            audioBase64,
+                            idClienteStr,
+                            Identificacion,
+                            FechaInicioGrabacion,
+                            FechaFinGrabacion,
+                            Latitud,
+                            Longitud,
+                            Agencia,
+                            LineaCredito,
+                            NumeroOperacion
+                        );
+                    } else {
+                        resultadoRegistro = await RegistroGrabacion(
+                            user,
+                            audioBase64,
+                            idClienteStr,
+                            Identificacion,
+                            FechaInicioGrabacion,
+                            FechaFinGrabacion,
+                            Latitud,
+                            Longitud,
+                            Agencia,
+                            LineaCredito,
+                            NumeroOperacion
+                        );
+                    }
+                    validacion = resultadoRegistro?.UrlGrabacion || resultadoRegistro?.FechaFinGrabacion;
+                }
+
+                if (validacion) {
+                    console.log('✅ Grabación enviada correctamente al backend');
+                    showSuccessToast(
+                        'Éxito',
+                        `Grabación enviada correctamente.\nDuración: ${formatTime(recordingTime)}`
+                    );
+                    resetRecordingState();
+                    return;
+                } else {
+                    throw new Error('No se pudo enviar la grabación al backend');
+                }
+            } catch (onlineError) {
+                console.error('❌ Error durante envío ONLINE:', String(onlineError));
 
                 // Guardar localmente como pendiente
                 Alert.alert(
@@ -568,7 +599,7 @@ const HomeScreen = () => {
                                     TiempoDuracion: formatTime(recordingTime),
                                 };
 
-                                await guardarGrabacionOfflineEnSQLite(grabacionPendiente);
+                                await guardarGrabacionOfflineEnSQLite({ ...grabacionPendiente, FechaCreacion: FechaFinGrabacion });
                                 console.log(`🎙️ Grabación guardada como pendiente [${environment.pais}]`);
                                 
                                 showSuccessToast(
@@ -582,9 +613,9 @@ const HomeScreen = () => {
                 );
             }
 
-        } catch (error: any) {
-            console.error('❌ Error general en stopRecording:', error?.message || error);
-            showErrorToast('Error', `No se pudo procesar la grabación: ${error?.message || 'Error desconocido'}`);
+        } catch (error) {
+            console.error('❌ Error general en stopRecording:', String(error));
+            showErrorToast('Error', `No se pudo procesar la grabación: ${String(error) || 'Error desconocido'}`);
             resetRecordingState();
         } finally {
             setIsSendingAudio(false);
@@ -635,7 +666,7 @@ const HomeScreen = () => {
                 UTI: 'com.apple.m4a-audio',
             });
         } catch (e: any) {
-            console.log('Error compartiendo audio:', e?.message || e);
+            console.log('Error compartiendo audio:', String(e));
             showErrorToast('Error', 'No se pudo compartir el audio.');
         }
     };
@@ -654,7 +685,7 @@ const HomeScreen = () => {
                 showErrorToast('Acceso cancelado', 'No se seleccionó ninguna carpeta.');
             }
         } catch (e: any) {
-            console.log('Error cambiando carpeta:', e?.message || e);
+            console.log('Error cambiando carpeta:', String(e));
             showErrorToast('Error', 'No se pudo actualizar la carpeta.');
         }
     };

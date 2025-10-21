@@ -791,7 +791,7 @@ async function subirAudioNube(audioFilePath: string, pais: string, folder = 'aud
   try {
     // Manejo especial para content:// en Android
     if (Platform.OS === 'android' && uri.startsWith('content://')) {
-  const FileSystem = require('expo-file-system/legacy');
+      const FileSystem = require('expo-file-system');
       const tempPath = FileSystem.cacheDirectory + fileName;
       await FileSystem.copyAsync({ from: uri, to: tempPath });
       uri = tempPath;

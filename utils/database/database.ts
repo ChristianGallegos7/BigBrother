@@ -4,8 +4,30 @@ import { environment } from '../../components/core/environment';
 import { Cliente } from '../../models/clinte.interface';
 
 // Abrir o crear la base de datos
+import * as FileSystem from 'expo-file-system/legacy';
+
+const DB_FILENAME = 'clientes.db';
+const DB_PATH = FileSystem.documentDirectory + DB_FILENAME;
+
 export const getDBConnection = async () => {
-  return await SQLite.openDatabaseAsync('clientes.db');
+  try {
+    return await SQLite.openDatabaseAsync(DB_FILENAME);
+  } catch (err) {
+    console.error('❌ Error abriendo la base de datos:', err);
+    // Intentar eliminar la base dañada y recrear
+    try {
+      await FileSystem.deleteAsync(DB_PATH, { idempotent: true });
+      console.warn('🧹 Base de datos dañada eliminada. Intentando recrear...');
+      const db = await SQLite.openDatabaseAsync(DB_FILENAME);
+      // Recrear tablas principales
+      await createClientesTable(db);
+      await createGrabacionesTable(db);
+      return db;
+    } catch (fatalErr) {
+      console.error('❌ Error fatal al recrear la base de datos:', fatalErr);
+      throw fatalErr;
+    }
+  }
 };
 
 // Crear tabla de clientes locales

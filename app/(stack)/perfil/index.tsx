@@ -1,6 +1,8 @@
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 // Importamos los íconos de la librería que usa la app original
+import { desconectarUsuario } from "@/components/core/miCore";
+import { useAuth } from '@/context/AuthContext';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from "react";
@@ -48,10 +50,19 @@ const PerfilScreen = () => {
     const storageFree = "402.72 GB";
     const cacheSize = "12.69 KB / 0.01 MB";
     const [userName, setUserName] = useState<string>('Usuario');
+    const { logout } = useAuth();
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         console.log("Cerrar Sesión Presionado");
-        // Lógica de cerrar sesión aquí
+        try {
+            const resultadoDesconexion = await desconectarUsuario();
+            if (resultadoDesconexion === true) {
+                await logout();
+                console.log('✅ Sesión cerrada correctamente');
+            }
+        } catch (error) {
+            console.error('❌ Error al cerrar sesión:', error);
+        }
     };
 
     useEffect(() => {

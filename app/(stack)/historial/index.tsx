@@ -76,7 +76,7 @@ const AudioItem = ({ item, onPress }: { item: Grabacion; onPress: () => void }) 
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Grabado:</Text>
                         <Text style={styles.detailValue}>
-                            {formatDate(item.FechaCreacion)}
+                            {formatDate(item.FechaFinGrabacion)}
                         </Text>
                     </View>
 
@@ -398,7 +398,7 @@ const HistorialScreen = () => {
                                 </View>
                                 <View style={styles.modalRow}>
                                     <Text style={styles.modalLabel}>📅 Fecha:</Text>
-                                    <Text style={styles.modalValue}>{formatDateWithSeconds(grabacionSeleccionada.FechaCreacion)}</Text>
+                                    <Text style={styles.modalValue}>{formatDateWithSeconds(grabacionSeleccionada.FechaFinGrabacion)}</Text>
                                 </View>
                                 <View style={styles.modalRow}>
                                     <Text style={styles.modalLabel}>⏱ Duración:</Text>
