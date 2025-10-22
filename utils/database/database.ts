@@ -278,6 +278,22 @@ export const eliminarTablaListaClientes = async () => {
   console.log("🧨 Tabla lista_clientes eliminada");
 };
 
+// Eliminar grabaciones antiguas/sincronizadas (caché)
+export const eliminarGrabacionesSincronizadas = async (): Promise<number> => {
+  try {
+    const db = await getDBConnection();
+    // Eliminar solo las grabaciones que ya fueron sincronizadas
+    const result = await db.runAsync(
+      'DELETE FROM grabaciones_pendientes WHERE sincronizado = 1'
+    );
+    console.log(`🧹 Se eliminaron ${result.changes} grabaciones sincronizadas`);
+    return result.changes || 0;
+  } catch (error) {
+    console.error('❌ Error al eliminar grabaciones sincronizadas:', error);
+    throw error;
+  }
+};
+
 // Contar grabaciones pendientes
 export const contarGrabacionesPendientes = async () => {
   try {

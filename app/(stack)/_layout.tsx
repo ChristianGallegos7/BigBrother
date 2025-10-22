@@ -48,6 +48,16 @@ const StackLayout = () => {
                     }}
                 />
 
+                <Stack.Screen
+                    name="configuracion/index"
+                    options={{
+                        headerShown: true,
+                        title: 'Configuración',
+                        presentation: 'card',
+                    }}
+                />
+
+
             </Stack>
             {showNav && <BottomNav />}
         </>

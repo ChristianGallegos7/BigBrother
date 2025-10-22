@@ -1,11 +1,14 @@
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 // Importamos los íconos de la librería que usa la app original
 import { desconectarUsuario } from "@/components/core/miCore";
 import { useAuth } from '@/context/AuthContext';
+import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
+import { eliminarGrabacionesSincronizadas } from "@/utils/database/database";
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // --- Subcomponente para cada opción de menú (Tarjeta) ---
 interface ProfileOptionProps {
@@ -50,7 +53,57 @@ const PerfilScreen = () => {
     const storageFree = "402.72 GB";
     const cacheSize = "12.69 KB / 0.01 MB";
     const [userName, setUserName] = useState<string>('Usuario');
+    const [modalVisible, setModalVisible] = useState(false);
+    const [isClearing, setIsClearing] = useState(false);
+    const fadeAnim = useRef(new Animated.Value(0)).current;
     const { logout } = useAuth();
+
+    const showModal = () => {
+        setModalVisible(true);
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    const hideModal = () => {
+        Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+        }).start(() => {
+            setModalVisible(false);
+        });
+    };
+
+    const clearCache = async () => {
+        setIsClearing(true);
+        try {
+            const deletedCount = await eliminarGrabacionesSincronizadas();
+            hideModal();
+            if (deletedCount > 0) {
+                showSuccessToast(
+                    'Caché eliminado',
+                    `Se eliminaron ${deletedCount} grabaciones sincronizadas`
+                );
+            } else {
+                showSuccessToast(
+                    'Sin grabaciones',
+                    'No hay grabaciones sincronizadas para eliminar'
+                );
+            }
+        } catch (error) {
+            console.error('Error al eliminar caché:', error);
+            hideModal();
+            showErrorToast(
+                'Error',
+                'No se pudo eliminar el caché. Intenta nuevamente.'
+            );
+        } finally {
+            setIsClearing(false);
+        }
+    };
 
     const handleLogout = async () => {
         console.log("Cerrar Sesión Presionado");
@@ -105,7 +158,10 @@ const PerfilScreen = () => {
                         iconLibrary="MaterialCommunityIcons"
                         title="Configuracion"
                         description="Cambiar la configuración de la cuenta."
-                        onPress={() => console.log('Ir a Configuración')}
+                        onPress={() => {
+                            // @ts-ignore
+                            router.push('/(stack)/configuracion/')
+                        }}
                     />
 
                     <ProfileOption
@@ -113,7 +169,7 @@ const PerfilScreen = () => {
                         iconLibrary="MaterialIcons"
                         title="Eliminar Caché"
                         description="Eliminar Grabaciones Antiguas."
-                        onPress={() => console.log('Eliminar Caché')}
+                        onPress={showModal}
                     />
 
                     <ProfileOption
@@ -146,6 +202,46 @@ const PerfilScreen = () => {
 
                 </View>
             </ScrollView>
+
+            {/* Modal de confirmación para eliminar caché */}
+            <Modal
+                transparent={true}
+                visible={modalVisible}
+                animationType="none"
+                onRequestClose={hideModal}
+            >
+                <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalIconContainer}>
+                            <MaterialIcons name="delete-sweep" size={50} color="#1a56db" />
+                        </View>
+                        <Text style={styles.modalTitle}>Confirmación</Text>
+                        <Text style={styles.modalMessage}>
+                            ¿Estás seguro de eliminar las grabaciones sincronizadas? Esta acción no se puede deshacer.
+                        </Text>
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={hideModal}
+                                disabled={isClearing}
+                            >
+                                <Text style={styles.modalButtonText}>No, Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.confirmButton, isClearing && styles.buttonDisabled]}
+                                onPress={clearCache}
+                                disabled={isClearing}
+                            >
+                                {isClearing ? (
+                                    <ActivityIndicator color="white" size="small" />
+                                ) : (
+                                    <Text style={styles.modalButtonText}>Sí, Eliminar</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Animated.View>
+            </Modal>
         </SafeAreaView>
     )
 }
@@ -252,5 +348,74 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 18,
         fontWeight: 'bold',
-    }
+    },
+
+    // --- Estilos del Modal ---
+    modalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '85%',
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 25,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 8,
+    },
+    modalIconContainer: {
+        marginBottom: 15,
+        padding: 15,
+        backgroundColor: '#e3f2fd',
+        borderRadius: 50,
+    },
+    modalTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#1f2937',
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    modalMessage: {
+        fontSize: 16,
+        color: '#4b5563',
+        marginBottom: 25,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+        gap: 12,
+    },
+    modalButton: {
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: 10,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: '#6b7280',
+    },
+    confirmButton: {
+        backgroundColor: '#1a56db',
+    },
+    modalButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    buttonDisabled: {
+        backgroundColor: '#93c5fd',
+    },
 });

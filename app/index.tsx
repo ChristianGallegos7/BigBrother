@@ -1,6 +1,7 @@
 import { environment } from "@/components/core/environment";
 import { IniciarSesionApp, obtenerTokenAccesoBigBrother } from "@/components/core/miCore";
 import CustomLoading from "@/components/CustomLoading";
+import { UnlockUserModal } from "@/components/UnlockUserModal";
 import { useAuth } from "@/context/AuthContext";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
 import { Feather } from "@expo/vector-icons";
@@ -15,6 +16,8 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [pais, setPais] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isUnlockModalVisible, setIsUnlockModalVisible] = useState(false);
+  const [blockedUserName, setBlockedUserName] = useState("");
   const router = useRouter();
   const { login } = useAuth(); // 👈 Importar el método login del contexto
 
@@ -46,11 +49,13 @@ export default function LoginScreen() {
         setLoading(false);
         
         if (resultData.tipo === 'blocked') {
-          showErrorToast("Usuario Bloqueado", resultData.mensaje);
+          // Usuario bloqueado, mostrar modal de desbloqueo
+          setBlockedUserName(user);
+          setIsUnlockModalVisible(true);
         } else if (resultData.tipo === 'changePassword') {
-          showErrorToast("Cambio de Clave", resultData.mensaje);
-          // Aquí podrías navegar a una pantalla de cambio de contraseña si la tienes
-          // router.push('/change-password');
+          // Redirigir a cambio de contraseña
+          showErrorToast("Cambio de Clave Requerido", resultData.mensaje);
+          router.push('/(stack)/cambiar-password/index');
         } else if (resultData.tipo === 'error') {
           showErrorToast("Error de inicio de sesión", resultData.mensaje);
         }
@@ -130,7 +135,16 @@ export default function LoginScreen() {
       <Text style={styles.forgotPasswordText}>
         ¿Te olvidaste tu contraseña?
       </Text>
-      <TouchableOpacity style={[styles.button, styles.recoverButton]}>
+      <TouchableOpacity 
+        style={[styles.button, styles.recoverButton]}
+        onPress={() => {
+          if (!pais) {
+            showErrorToast("País requerido", "Por favor selecciona un país antes de continuar.");
+            return;
+          }
+          router.push('/(stack)/recuperar-password/index');
+        }}
+      >
         <Text style={styles.buttonText}>
           Recuperar contraseña
         </Text>
@@ -139,6 +153,21 @@ export default function LoginScreen() {
         Versión {environment.version}
       </Text>
       <CustomLoading visible={loading} />
+      
+      {/* Modal de desbloqueo de usuario */}
+      <UnlockUserModal
+        visible={isUnlockModalVisible}
+        userName={blockedUserName}
+        onClose={() => {
+          setIsUnlockModalVisible(false);
+          setBlockedUserName("");
+        }}
+        onSuccess={() => {
+          setIsUnlockModalVisible(false);
+          setBlockedUserName("");
+          showSuccessToast("Usuario desbloqueado", "Ahora puedes iniciar sesión nuevamente.");
+        }}
+      />
     </View>
     // <Redirect href={"/(stack)/home"} />
   );
