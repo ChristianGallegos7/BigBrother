@@ -57,6 +57,24 @@ const StackLayout = () => {
                     }}
                 />
 
+                <Stack.Screen
+                    name="contactosos/index"
+                    options={{
+                        headerShown: true,
+                        title: 'Contactos de Emergencia',
+                        presentation: 'card',
+                    }}
+                />
+
+                <Stack.Screen 
+                    name="acercade/index"
+                    options={{
+                        headerShown: true,
+                        title: 'Acerca de',
+                        presentation: 'card',
+                    }}
+                />
+
 
             </Stack>
             {showNav && <BottomNav />}

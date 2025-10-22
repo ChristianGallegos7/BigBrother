@@ -177,7 +177,7 @@ const PerfilScreen = () => {
                         iconLibrary="MaterialCommunityIcons"
                         title="Contacto SOS"
                         description="Contactos de Emergencia."
-                        onPress={() => console.log('Ir a Contacto SOS')}
+                        onPress={() => router.push('/contactosos/')}
                     />
 
                     <ProfileOption
@@ -185,7 +185,7 @@ const PerfilScreen = () => {
                         iconLibrary="Ionicons"
                         title="Acerca de"
                         description="Aquí puedes ver datos de la App."
-                        onPress={() => console.log('Ir a Acerca de')}
+                        onPress={() => router.push('/acercade/')}
                     />
 
                     {/* Información del Sistema
