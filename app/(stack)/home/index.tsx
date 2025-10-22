@@ -2,7 +2,7 @@ import { environment } from "@/components/core/environment";
 import { DetenerGrabacion, IniciarGrabacion, RegistroGrabacion, RegistroGrabacionGT } from "@/components/core/miCore";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
-import { getDBConnection, guardarClienteLocalEnSQLite, guardarGrabacionOfflineEnSQLite } from "@/utils/database/database";
+import { getDBConnection, guardarClienteLocalEnSQLite, guardarGrabacionOfflineEnSQLite, tryFlushSQLiteBacklog } from "@/utils/database/database";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as Location from 'expo-location';
@@ -142,6 +142,23 @@ const HomeScreen = () => {
             }
         }
     }, [params.clientData, params.fromAddClient, params.fromClientList, params.savedLocally]);
+
+    // Cuando vuelve la conexión, intentar volcar backups a SQLite
+    useEffect(() => {
+        const flush = async () => {
+            try {
+                if (isOnline) {
+                    const res = await tryFlushSQLiteBacklog();
+                    if (res) {
+                        console.log('🗂️ Backlog volcado a SQLite:', res);
+                    }
+                }
+            } catch (e) {
+                console.log('No se pudo volcar backlog ahora:', e);
+            }
+        };
+        flush();
+    }, [isOnline]);
 
     useEffect(() => {
         let interval: any;

@@ -71,6 +71,10 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Permite a $(PRODUCT_NAME) usar tu ubicación para registrar grabaciones."
         }
+      ],
+      [
+        "./plugins/with-ssl-pinning-cert",
+        { "certFiles": ["apibg.cer"], "sourceDir": "assets" }
       ]
     ],
     "experiments": {

@@ -19,10 +19,12 @@ import {
     TouchableOpacity,
     View
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const AgregarClienteScreen = () => {
     const router = useRouter();
     const { isOnline } = useNetworkStatus(); // 👈 Usar el hook global
+    const insets = useSafeAreaInsets();
     const [loading, setLoading] = useState(false);
     const [nombres, setNombres] = useState('');
     const [apellidos, setApellidos] = useState('');
@@ -273,7 +275,10 @@ const AgregarClienteScreen = () => {
         >
             <ScrollView
                 style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { paddingBottom: Math.max(insets.bottom, 16) + 120 }
+                ]}
                 keyboardShouldPersistTaps="handled"
             >
 
@@ -388,28 +393,33 @@ const AgregarClienteScreen = () => {
                
             </ScrollView>
 
-            {/* Botones de acción fijos en la parte inferior */}
-            <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                    style={[styles.button, styles.cancelButton]}
-                    onPress={handleCancelar}
-                    disabled={loading}
-                >
-                    <Ionicons name="close-circle-outline" size={20} color="#666" />
-                    <Text style={styles.cancelButtonText}>Cancelar</Text>
-                </TouchableOpacity>
+            {/* Botones de acción con safe-area inferior */}
+            <SafeAreaView edges={['bottom']} style={{ backgroundColor: '#fff' }}>
+                <View style={[
+                    styles.buttonContainer,
+                    { paddingBottom: Math.max(insets.bottom, 12) }
+                ]}>
+                    <TouchableOpacity
+                        style={[styles.button, styles.cancelButton]}
+                        onPress={handleCancelar}
+                        disabled={loading}
+                    >
+                        <Ionicons name="close-circle-outline" size={20} color="#666" />
+                        <Text style={styles.cancelButtonText}>Cancelar</Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={[styles.button, styles.saveButton, loading && styles.buttonDisabled]}
-                    onPress={handleGuardar}
-                    disabled={loading}
-                >
-                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                    <Text style={styles.saveButtonText}>
-                        {loading ? 'Guardando...' : 'Guardar Cliente'}
-                    </Text>
-                </TouchableOpacity>
-            </View>
+                    <TouchableOpacity
+                        style={[styles.button, styles.saveButton, loading && styles.buttonDisabled]}
+                        onPress={handleGuardar}
+                        disabled={loading}
+                    >
+                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                        <Text style={styles.saveButtonText}>
+                            {loading ? 'Guardando...' : 'Guardar Cliente'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
         </KeyboardAvoidingView>
     );
 };
@@ -505,6 +515,12 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: '#e0e0e0',
         gap: 12,
+        // asegurar que se mantenga visible sobre barras del sistema
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
     },
     button: {
         flex: 1,

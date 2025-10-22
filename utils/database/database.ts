@@ -5,28 +5,173 @@ import { Cliente } from '../../models/clinte.interface';
 
 // Abrir o crear la base de datos
 import * as FileSystem from 'expo-file-system/legacy';
+import * as SecureStore from 'expo-secure-store';
 
 const DB_FILENAME = 'clientes.db';
-const DB_PATH = FileSystem.documentDirectory + DB_FILENAME;
+const DB_PATH = (FileSystem as any).documentDirectory
+  ? `${(FileSystem as any).documentDirectory}${DB_FILENAME}`
+  : `${(FileSystem as any).cacheDirectory || ''}${DB_FILENAME}`;
+
+const BACKUP_KEYS = {
+  clientes: 'sqlite_backup_clientes',
+  grabaciones: 'sqlite_backup_grabaciones',
+};
+
+let cachedDb: SQLite.SQLiteDatabase | null = null;
+let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+
+const withRetries = async <T>(fn: () => Promise<T>, attempts = 2): Promise<T> => {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    try { return await fn(); } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 150 * (i + 1))); }
+  }
+  throw lastErr;
+};
 
 export const getDBConnection = async () => {
-  try {
-    return await SQLite.openDatabaseAsync(DB_FILENAME);
-  } catch (err) {
-    console.error('❌ Error abriendo la base de datos:', err);
-    // Intentar eliminar la base dañada y recrear
+  if (cachedDb) return cachedDb;
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
     try {
-      await FileSystem.deleteAsync(DB_PATH, { idempotent: true });
-      console.warn('🧹 Base de datos dañada eliminada. Intentando recrear...');
-      const db = await SQLite.openDatabaseAsync(DB_FILENAME);
-      // Recrear tablas principales
+      const db = await withRetries(() => SQLite.openDatabaseAsync(DB_FILENAME), 2);
       await createClientesTable(db);
       await createGrabacionesTable(db);
+      cachedDb = db;
       return db;
-    } catch (fatalErr) {
-      console.error('❌ Error fatal al recrear la base de datos:', fatalErr);
-      throw fatalErr;
+    } catch (err) {
+      console.error('❌ Error abriendo la base de datos:', err);
+      // Intentar eliminar la base dañada y recrear
+      try {
+        if ((FileSystem as any).deleteAsync && DB_PATH) {
+          await (FileSystem as any).deleteAsync(DB_PATH, { idempotent: true });
+        }
+        console.warn('🧹 Base de datos dañada eliminada. Intentando recrear...');
+        const db = await SQLite.openDatabaseAsync(DB_FILENAME);
+        await createClientesTable(db);
+        await createGrabacionesTable(db);
+        cachedDb = db;
+        return db;
+      } catch (fatalErr) {
+        console.error('❌ Error fatal al recrear la base de datos:', fatalErr);
+        throw fatalErr;
+      }
+    } finally {
+      initPromise = null;
     }
+  })();
+
+  return initPromise;
+};
+
+// Fallback backups when SQLite is unavailable
+const pushBackup = async (key: string, payload: any) => {
+  try {
+    const current = (await SecureStore.getItemAsync(key)) || '[]';
+    const arr = JSON.parse(current);
+    arr.push({ payload, ts: Date.now() });
+    // Keep last 300 entries max
+    const trimmed = arr.slice(-300);
+    await SecureStore.setItemAsync(key, JSON.stringify(trimmed));
+  } catch (e) {
+    console.warn('No se pudo respaldar en SecureStore:', e);
+  }
+};
+
+export const tryFlushSQLiteBacklog = async (): Promise<{ clientes: number; grabaciones: number } | null> => {
+  try {
+    const db = await getDBConnection();
+    // clientes
+    const clientesStr = (await SecureStore.getItemAsync(BACKUP_KEYS.clientes)) || '[]';
+    const clientes = JSON.parse(clientesStr) as Array<{ payload: any; ts: number }>;
+    let clientesOk = 0;
+    for (const item of clientes) {
+      try {
+        // Inserción directa (similar a guardarClienteLocalEnSQLite pero evitando recursión)
+        const c = item.payload;
+        await createClientesTable(db);
+        const localId = c.localId || `LOCAL_${Date.now()}`;
+        await db.runAsync(
+          `INSERT OR REPLACE INTO clientes_locales (
+            localId, Identificacion, Nombres, Apellidos, NumeroOperacion, FechaCarga,
+            Agencia, LineaCredito, TieneGrabacion, UsuarioAsignacion, Fuente,
+            CodigoCedente, TipoIdentificacion, DatosAdicionales, IdClienteCarga,
+            IdExterno, pais, sincronizado
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            localId,
+            c.Identificacion || '',
+            c.Nombres || '',
+            c.Apellidos || '',
+            c.NumeroOperacion || '',
+            c.FechaCarga || new Date().toISOString(),
+            c.Agencia || '',
+            c.LineaCredito || '',
+            c.TieneGrabacion ? 1 : 0,
+            c.UsuarioAsignacion || '',
+            c.Fuente || 'BIGBROTHER',
+            c.CodigoCedente || 'MANUAL',
+            c.TipoIdentificacion || 'CED',
+            c.DatosAdicionales || '',
+            c.IdClienteCarga || 0,
+            c.IdExterno || '',
+            environment.pais,
+            0,
+          ]
+        );
+        clientesOk++;
+      } catch (e) {
+        console.warn('No se pudo reinsertar cliente desde backup:', e);
+      }
+    }
+    if (clientesOk === clientes.length) {
+      await SecureStore.deleteItemAsync(BACKUP_KEYS.clientes);
+    } else {
+      await SecureStore.setItemAsync(BACKUP_KEYS.clientes, JSON.stringify([]));
+    }
+
+    // grabaciones
+    const grabStr = (await SecureStore.getItemAsync(BACKUP_KEYS.grabaciones)) || '[]';
+    const grabs = JSON.parse(grabStr) as Array<{ payload: any; ts: number }>;
+    let grabsOk = 0;
+    for (const item of grabs) {
+      try {
+        const g = item.payload;
+        await createGrabacionesTable(db);
+        await db.runAsync(
+          `INSERT INTO grabaciones_pendientes 
+          (Identificacion, audioPath, FechaInicio, FechaFin, Latitud, Longitud, Agencia, LineaCredito, NumeroOperacion, user, Duracion, TiempoDuracion, sincronizado, EsLocal) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)`,
+          [
+            g.identificacion,
+            g.audioPath,
+            g.FechaInicio,
+            g.FechaFin,
+            g.Latitud,
+            g.Longitud,
+            g.Agencia || '',
+            g.LineaCredito || '',
+            g.NumeroOperacion || '',
+            g.user,
+            g.Duracion || 0,
+            g.TiempoDuracion || '00:00:00',
+          ]
+        );
+        grabsOk++;
+      } catch (e) {
+        console.warn('No se pudo reinsertar grabación desde backup:', e);
+      }
+    }
+    if (grabsOk === grabs.length) {
+      await SecureStore.deleteItemAsync(BACKUP_KEYS.grabaciones);
+    } else {
+      await SecureStore.setItemAsync(BACKUP_KEYS.grabaciones, JSON.stringify([]));
+    }
+
+    return { clientes: clientesOk, grabaciones: grabsOk };
+  } catch (e) {
+    console.warn('SQLite no disponible para flush. Se mantiene backup.', e);
+    return null;
   }
 };
 
@@ -131,7 +276,9 @@ export const guardarClienteLocalEnSQLite = async (cliente: any) => {
     return localId;
   } catch (error) {
     console.error('❌ Error guardando cliente local en SQLite:', error);
-    throw error;
+    // Backup a SecureStore para no perder datos
+    await pushBackup(BACKUP_KEYS.clientes, cliente);
+    return cliente.localId || `LOCAL_${Date.now()}`;
   }
 };
 
@@ -164,6 +311,7 @@ export const guardarGrabacionOfflineEnSQLite = async (grabacion: any) => {
     console.log(`✅ Grabación guardada en SQLite para cliente Identificacion: ${grabacion.identificacion}`);
   } catch (err) {
     console.error('❌ Error al guardar grabación en SQLite:', err);
+    await pushBackup(BACKUP_KEYS.grabaciones, grabacion);
   }
 };
 
@@ -244,19 +392,28 @@ export const insertarListaClientes = async (clientes: any[]) => {
 
 // Obtener clientes de lista locales
 export const obtenerClientesListaLocales = async (): Promise<Cliente[]> => {
-  const db = await getDBConnection();
-  const rows = await db.getAllAsync<Cliente>("SELECT * FROM lista_clientes WHERE EsArchivado = 0");
-  return rows;
+  try {
+    const db = await getDBConnection();
+    const rows = await db.getAllAsync<Cliente>("SELECT * FROM lista_clientes WHERE EsArchivado = 0");
+    return rows;
+  } catch (e) {
+    console.warn('SQLite no disponible. Devolviendo lista vacía.', e);
+    return [] as Cliente[];
+  }
 };
 
 // Archivar cliente de lista local
 export const archivarClienteListaLocal = async (idClienteCarga: number) => {
-  const db = await getDBConnection();
-  await db.runAsync(
-    "UPDATE lista_clientes SET EsArchivado = 1 WHERE IdClienteCarga = ?",
-    [idClienteCarga]
-  );
-  console.log(`✅ Cliente con IdClienteCarga ${idClienteCarga} archivado localmente.`);
+  try {
+    const db = await getDBConnection();
+    await db.runAsync(
+      "UPDATE lista_clientes SET EsArchivado = 1 WHERE IdClienteCarga = ?",
+      [idClienteCarga]
+    );
+    console.log(`✅ Cliente con IdClienteCarga ${idClienteCarga} archivado localmente.`);
+  } catch (e) {
+    console.warn('No se pudo archivar en SQLite (offline o no disponible).');
+  }
 };
 
 // Eliminar tablas SQLite

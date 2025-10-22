@@ -148,7 +148,7 @@ const PerfilScreen = () => {
                         <Image source={require("../../../assets/images/Logos/logo.png")} style={styles.logo} />
                         <View style={{ justifyContent: "center" }}>
                             <Text style={styles.nombre}> {userName} </Text>
-                            <Text style={styles.rol}>Administrador General de SiCobra</Text>
+                            <Text style={styles.rol}>SiCobra</Text>
                         </View>
                     </View>
 

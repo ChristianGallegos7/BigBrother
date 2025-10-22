@@ -4,6 +4,7 @@ import { StatusBar, View } from "react-native";
 import Toast from 'react-native-toast-message';
 import { CustomSplashScreen } from '../components/custom-splash-screen';
 import { AuthProvider } from '../context/AuthContext';
+import toastConfig from '../utils/alertas/toastConfig';
 
 const RootLayout = () => {
     const [loaded] = useFonts({
@@ -21,7 +22,7 @@ const RootLayout = () => {
         <AuthProvider>
             <View style={{ flex: 1 }}>
                 <Slot />
-                <Toast />
+                <Toast config={toastConfig} topOffset={60} />
                 <StatusBar barStyle="default" />
             </View>
         </AuthProvider>
