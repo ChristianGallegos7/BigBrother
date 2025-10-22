@@ -11,7 +11,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from "react";
 import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
+ 
 import {
     Directory,
     Paths
@@ -19,6 +19,7 @@ import {
 import {
     copyAsync, getInfoAsync, readAsStringAsync, StorageAccessFramework, writeAsStringAsync
 } from 'expo-file-system/legacy';
+
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface UserData {

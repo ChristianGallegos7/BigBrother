@@ -55,7 +55,7 @@ export default function LoginScreen() {
         } else if (resultData.tipo === 'changePassword') {
           // Redirigir a cambio de contraseña
           showErrorToast("Cambio de Clave Requerido", resultData.mensaje);
-          router.push('/(stack)/cambiar-password/');
+          router.push('/(stack)/cambiar-password');
         } else if (resultData.tipo === 'error') {
           showErrorToast("Error de inicio de sesión", resultData.mensaje);
         }
@@ -138,11 +138,8 @@ export default function LoginScreen() {
       <TouchableOpacity 
         style={[styles.button, styles.recoverButton]}
         onPress={() => {
-          if (!pais) {
-            showErrorToast("País requerido", "Por favor selecciona un país antes de continuar.");
-            return;
-          }
-          router.push('/(stack)/recuperar-password/');
+          
+          router.push('/(stack)/recuperar-password');
         }}
       >
         <Text style={styles.buttonText}>

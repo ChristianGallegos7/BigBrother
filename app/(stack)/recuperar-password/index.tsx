@@ -100,7 +100,7 @@ export default function RecuperarPasswordScreen() {
                         <View style={styles.infoBox}>
                             <Feather name="info" size={20} color="#041dfdff" />
                             <Text style={styles.infoText}>
-                                Recibirás una contraseña temporal en tu WhatsApp registrado. Deberás cambiarla al iniciar sesión.
+                                Recibirás una contraseña temporal en tu correo electronico registrado. Deberás cambiarla al iniciar sesión.
                             </Text>
                         </View>
 

@@ -2,10 +2,11 @@ import { environment } from "@/components/core/environment";
 import { ConsultarGrabacionesUsuarioHoy, RegistroGrabacion, RegistroGrabacionGT } from "@/components/core/miCore";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { Grabacion } from "@/models/grabacion.interface";
-import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
+import { showSuccessToast } from "@/utils/alertas/alertas";
 import { getDBConnection } from "@/utils/database/database";
 import { Ionicons } from "@expo/vector-icons";
 import { getInfoAsync, readAsStringAsync } from 'expo-file-system/legacy';
+import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -128,7 +129,23 @@ const HistorialScreen = () => {
         try {
             if (!isOnline) {
                 console.log('📴 Sin conexión');
-                setLista([]);
+                // Mostrar audios enviados desde SecureStore si existen
+                const audiosEnviados = await SecureStore.getItem('AudiosEnviados');
+                if (audiosEnviados) {
+                    try {
+                        const lista: Grabacion[] = JSON.parse(audiosEnviados);
+                        setLista(Array.isArray(lista) ? lista : []);
+                        return;
+                    } catch {}
+                }
+                // Si no hay en SecureStore, intentar cargar de SQLite
+                try {
+                    const db = await getDBConnection();
+                    const locales: Grabacion[] = await db.getAllAsync('SELECT * FROM grabaciones_pendientes WHERE sincronizado = 1 AND EsLocal = 1');
+                    setLista(Array.isArray(locales) ? locales : []);
+                } catch {
+                    setLista([]);
+                }
                 return;
             }
 
@@ -150,13 +167,46 @@ const HistorialScreen = () => {
 
             const datosSinError = datos.filter((item: any) => !item.EsError);
 
-            const dbStartTime = Date.now();
-            const db = await getDBConnection();
-            const locales = await db.getAllAsync<{ NumeroOperacion: string; Identificacion: string }>(
-                `SELECT NumeroOperacion, Identificacion FROM grabaciones_pendientes WHERE sincronizado = 1 AND EsLocal = 1`
-            );
-            const dbTime = Date.now() - dbStartTime;
-            console.log(`💾 Consulta SQLite completada: ${locales.length} registros (${dbTime}ms)`);
+            // Consulta SQLite con reintentos y manejo robusto de errores
+            let locales: { NumeroOperacion: string; Identificacion: string }[] = [];
+            const maxReintentos = 3;
+            let intentoActual = 0;
+            
+            while (intentoActual < maxReintentos) {
+                try {
+                    const dbStartTime = Date.now();
+                    const db = await getDBConnection();
+                    
+                    // Timeout para la consulta SQLite (2 segundos)
+                    const sqliteTimeoutPromise = new Promise<never>((_, reject) => 
+                        setTimeout(() => reject(new Error('SQLite Timeout')), 2000)
+                    );
+
+                    locales = await Promise.race([
+                        db.getAllAsync<{ NumeroOperacion: string; Identificacion: string }>(
+                            `SELECT NumeroOperacion, Identificacion FROM grabaciones_pendientes WHERE sincronizado = 1 AND EsLocal = 1`
+                        ),
+                        sqliteTimeoutPromise
+                    ]);
+
+                    const dbTime = Date.now() - dbStartTime;
+                    console.log(`💾 Consulta SQLite completada: ${locales.length} registros (${dbTime}ms)`);
+                    break; // Salir del bucle si la consulta fue exitosa
+                    
+                } catch (dbError: any) {
+                    intentoActual++;
+                    console.warn(`⚠️ Error en SQLite (intento ${intentoActual}/${maxReintentos}):`, dbError?.message);
+                    
+                    if (intentoActual >= maxReintentos) {
+                        console.error('❌ SQLite falló después de múltiples intentos. Continuando sin datos locales.');
+                        locales = []; // Continuar sin datos locales
+                        break;
+                    }
+                    
+                    // Esperar antes de reintentar (100ms, 200ms, 300ms)
+                    await new Promise(resolve => setTimeout(resolve, intentoActual * 100));
+                }
+            }
 
             const listaMarcada = datosSinError.map(item => {
                 const esLocal = locales.some(
@@ -169,26 +219,62 @@ const HistorialScreen = () => {
             console.log(`✅ Historial cargado en ${Date.now() - startTime}ms`);
         } catch (error: any) {
             console.error('❌ Error en obtenerDatosAsync:', error?.message || error);
-            
-            if (error?.message?.includes('Timeout')) {
-                showErrorToast('Timeout', 'El servidor está tardando demasiado. Intenta de nuevo.');
-            } else {
-                showErrorToast('Error', 'No se pudo cargar el historial.');
+            // Si falla la consulta al servidor, mostrar audios enviados de SecureStore
+            try {
+                const audiosEnviados = await SecureStore.getItem('AudiosEnviados');
+                if (audiosEnviados) {
+                    const lista: Grabacion[] = JSON.parse(audiosEnviados);
+                    setLista(Array.isArray(lista) ? lista : []);
+                    return;
+                }
+            } catch {}
+            // Si no hay en SecureStore, intentar cargar de SQLite
+            try {
+                const db = await getDBConnection();
+                const locales: Grabacion[] = await db.getAllAsync('SELECT * FROM grabaciones_pendientes WHERE sincronizado = 1 AND EsLocal = 1');
+                setLista(Array.isArray(locales) ? locales : []);
+            } catch {
+                setLista([]);
             }
-            
-            setLista([]);
         }
     };
 
     const actualizarNumGrabaciones = async () => {
-        try {
-            const db = await getDBConnection();
-            const result = await db.getFirstAsync<{ total: number }>(
-                'SELECT COUNT(*) as total FROM grabaciones_pendientes WHERE sincronizado = 0'
-            );
-            setNumGrabacion(result?.total || 0);
-        } catch (error) {
-            console.error('❌ Error:', error);
+        const maxReintentos = 3;
+        let intentoActual = 0;
+        
+        while (intentoActual < maxReintentos) {
+            try {
+                const db = await getDBConnection();
+                
+                // Timeout para la consulta SQLite (2 segundos)
+                const timeoutPromise = new Promise<never>((_, reject) => 
+                    setTimeout(() => reject(new Error('SQLite Timeout')), 2000)
+                );
+
+                const result = await Promise.race([
+                    db.getFirstAsync<{ total: number }>(
+                        'SELECT COUNT(*) as total FROM grabaciones_pendientes WHERE sincronizado = 0'
+                    ),
+                    timeoutPromise
+                ]);
+                
+                setNumGrabacion(result?.total || 0);
+                return; // Salir si fue exitoso
+                
+            } catch (error: any) {
+                intentoActual++;
+                console.warn(`⚠️ Error actualizando contador (intento ${intentoActual}/${maxReintentos}):`, error?.message);
+                
+                if (intentoActual >= maxReintentos) {
+                    console.error('❌ No se pudo actualizar el contador de grabaciones');
+                    setNumGrabacion(0); // Establecer en 0 por seguridad
+                    return;
+                }
+                
+                // Esperar antes de reintentar
+                await new Promise(resolve => setTimeout(resolve, intentoActual * 100));
+            }
         }
     };
 
