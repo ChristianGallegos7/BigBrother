@@ -12,13 +12,16 @@ import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from "react";
 import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
  
-import {
-    Directory,
-    Paths
-} from 'expo-file-system';
-import {
-    copyAsync, getInfoAsync, readAsStringAsync, StorageAccessFramework, writeAsStringAsync
-} from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
+import { copyAsync, getInfoAsync, makeDirectoryAsync, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy';
+// Compat helpers for expo-file-system variants
+const SAF = (FileSystem as any).StorageAccessFramework as
+    | undefined
+    | {
+            requestDirectoryPermissionsAsync?: () => Promise<{ granted: boolean; directoryUri?: string }>;
+            createFileAsync?: (dirUri: string, fileName: string, mimeType: string) => Promise<string>;
+        };
+
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -211,17 +214,26 @@ const HomeScreen = () => {
     };
 
     const generateAudioPath = async (): Promise<string> => {
-        const baseDirectory = Paths.document;
-        const appFolder = new Directory(baseDirectory, "BigBrother");
-        const audiosDirectory = new Directory(appFolder, "Audios");
-
-        // Crear el directorio si no existe
-        if (!(await getInfoAsync(audiosDirectory.uri)).exists) {
-            await audiosDirectory.create({ intermediates: true });
+        // Solo utilidad opcional: no se usa para grabar (expo-av maneja la ruta temporal internamente)
+        const baseDirectory = ((FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory) as string | undefined;
+        if (!baseDirectory) {
+            // En caso extremo, devolvemos un nombre simple; se usará como etiqueta, no para escribir.
+            return generateUniqueFileName('audio');
         }
-
-        const fileName = generateUniqueFileName('audio');
-        return `${audiosDirectory.uri}${fileName}`;
+        const appFolder = `${baseDirectory}BigBrother/`;
+        const audiosDirectory = `${appFolder}Audios/`;
+        try {
+            const dirInfo = await getInfoAsync(audiosDirectory);
+            if (!dirInfo.exists) {
+                await makeDirectoryAsync(audiosDirectory, { intermediates: true });
+            }
+            const fileName = generateUniqueFileName('audio');
+            return `${audiosDirectory}${fileName}`;
+        } catch {
+            // Si no se puede crear, devolvemos un path en la base directamente
+            const fileName = generateUniqueFileName('audio');
+            return `${baseDirectory}${fileName}`;
+        }
     };
 
     const handlePlayPause = () => {
@@ -265,10 +277,8 @@ const HomeScreen = () => {
                 return;
             }
 
-            // 3. ✅ Generar path para el audio antes de grabar
-            const path = await generateAudioPath();
-            setAudioFilePath(path);
-            console.log('📁 Path de grabación generado:', path);
+            // 3. ✅ No forzamos creación de carpetas antes de grabar; expo-av crea un archivo temporal válido
+            setAudioFilePath(null);
 
             // 4. ✅ Verificar que el archivo se pueda crear
             await Audio.setAudioModeAsync({
@@ -283,7 +293,7 @@ const HomeScreen = () => {
             setIsRecording(true);
             setRecordingTime(0);
 
-            console.log('✅ Grabación iniciada en:', path);
+            console.log('✅ Grabación iniciada');
 
             // 5. ✅ Obtener geolocalización con manejo de errores
             let latitude = 0;
@@ -635,14 +645,14 @@ const HomeScreen = () => {
     };
 
     const supportsSAF = () => {
-    return Platform.OS === 'android' && !!StorageAccessFramework?.requestDirectoryPermissionsAsync;
+    return Platform.OS === 'android' && !!SAF?.requestDirectoryPermissionsAsync;
     };
     const getOrRequestAndroidDirUri = async (): Promise<string | null> => {
         try {
             const stored = await SecureStore.getItem('AudioDirUri');
             if (stored) return stored;
-            if (!StorageAccessFramework?.requestDirectoryPermissionsAsync) return null;
-            const perm = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+            if (!SAF?.requestDirectoryPermissionsAsync) return null;
+            const perm = await SAF.requestDirectoryPermissionsAsync();
             if (perm?.granted && perm?.directoryUri) {
                 await SecureStore.setItem('AudioDirUri', perm.directoryUri);
                 return perm.directoryUri;
@@ -674,11 +684,11 @@ const HomeScreen = () => {
 
     const handleChangeFolder = async () => {
         try {
-            if (!StorageAccessFramework?.requestDirectoryPermissionsAsync) {
+            if (!SAF?.requestDirectoryPermissionsAsync) {
                 showErrorToast('No compatible', 'Esta función requiere Android con SAF.');
                 return;
             }
-            const perm = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+            const perm = await SAF.requestDirectoryPermissionsAsync();
             if (perm?.granted && perm?.directoryUri) {
                 await SecureStore.setItem('AudioDirUri', perm.directoryUri);
                 showSuccessToast('Carpeta actualizada', 'Usaremos esta carpeta para guardar audios.');
@@ -699,34 +709,49 @@ const HomeScreen = () => {
             if (Platform.OS === 'android') {
                 const dirUri = await getOrRequestAndroidDirUri();
                 if (dirUri) {
-                    // Usar SAF solo si está disponible
                     try {
-                        if (StorageAccessFramework) {
-                            const destFileUri = await StorageAccessFramework.createFileAsync(dirUri, fileName, 'audio/m4a');
-                            const base64Data = await readAsStringAsync(uri, { encoding: 'base64' });
-                            await writeAsStringAsync(destFileUri, base64Data, { encoding: 'base64' });
-                            console.log('Audio guardado (SAF):', destFileUri);
-                            return destFileUri; // content://...
-                        }
+                        const destFileUri = await SAF!.createFileAsync!(dirUri, fileName, 'audio/m4a');
+                        const base64Data = await readAsStringAsync(uri, { encoding: 'base64' });
+                        await writeAsStringAsync(destFileUri, base64Data, { encoding: 'base64' });
+                        console.log('Audio guardado (SAF):', destFileUri);
+                        return destFileUri;
                     } catch (safError) {
                         console.warn('SAF no disponible, usando fallback:', safError);
                     }
                 }
             }
 
-            // Fallback: sandbox de la app (Documentos de la app) usando la nueva API
-            const baseDirectory = Paths.document;
-            const appFolder = new Directory(baseDirectory, "BigBrother");
-            const audiosDirectory = new Directory(appFolder, "Audios");
-            if (!(await getInfoAsync(audiosDirectory.uri)).exists) {
-                await audiosDirectory.create({ intermediates: true });
+            // Fallback: sandbox de la app (Documentos/Caché de la app)
+            const baseDirectory = ((FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory) as string | undefined;
+            if (!baseDirectory) {
+                console.warn('No hay baseDirectory disponible; usando URI original');
+                return uri; // Último recurso: dejar el archivo donde está
             }
-            const newPath = `${audiosDirectory.uri}${fileName}`;
-            await copyAsync({ from: uri, to: newPath });
-            console.log('Audio guardado (privado app):', newPath);
-            return newPath;
+            try {
+                const appFolder = `${baseDirectory}BigBrother/`;
+                const audiosDirectory = `${appFolder}Audios/`;
+                const dirInfo = await getInfoAsync(audiosDirectory);
+                if (!dirInfo.exists) {
+                    await makeDirectoryAsync(audiosDirectory, { intermediates: true });
+                }
+                const newPath = `${audiosDirectory}${fileName}`;
+                await copyAsync({ from: uri, to: newPath });
+                console.log('Audio guardado (privado app):', newPath);
+                return newPath;
+            } catch (dirErr) {
+                console.warn("No se pudo crear/copiar a BigBrother/Audios. Intentando raíz de baseDirectory:", dirErr);
+                const newPath = `${baseDirectory}${fileName}`;
+                try {
+                    await copyAsync({ from: uri, to: newPath });
+                    console.log('Audio guardado (baseDirectory):', newPath);
+                    return newPath;
+                } catch (copyErr) {
+                    console.warn('No se pudo copiar a baseDirectory. Usando URI original:', copyErr);
+                    return uri;
+                }
+            }
         } catch (error) {
-            console.error('Error al guardar audio (API híbrida):', error);
+            console.error('Error al guardar audio (API estable):', error);
             showErrorToast('Error', 'No se pudo guardar el archivo en el almacenamiento');
             return null;
         }
