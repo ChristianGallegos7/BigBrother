@@ -25,8 +25,7 @@ const InfoItem = ({ label, value, icon }: InfoItemProps) => (
 
 const AcercaDeScreen = () => {
     const handleSupportContact = () => {
-        // Puedes agregar aquí un enlace de email o WhatsApp
-        const email = "soporte@inventartech.com";
+        const email = "fbasantes@sicobra.com";
         Linking.openURL(`mailto:${email}`);
     };
 
