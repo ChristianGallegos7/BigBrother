@@ -55,7 +55,10 @@ export default function LoginScreen() {
         } else if (resultData.tipo === 'changePassword') {
           // Redirigir a cambio de contraseña
           showErrorToast("Cambio de Clave Requerido", resultData.mensaje);
-          router.push('/(stack)/cambiar-password');
+          router.push({
+            pathname: '/(stack)/cambiar-password',
+            params: { userName: user }
+          });
         } else if (resultData.tipo === 'error') {
           showErrorToast("Error de inicio de sesión", resultData.mensaje);
         }

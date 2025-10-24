@@ -222,6 +222,8 @@ async function obtenerTokenAccesoBigBrother(user: any, pass: any) {
       // Guardar cada dato en SecureStore con su nombre correspondiente
       if (response.data.Token) {
         await SecureStore.setItem('Token', response.data.Token);
+        // También guardar como Tokenbb para compatibilidad con otras funciones
+        await SecureStore.setItem('Tokenbb', response.data.Token);
       }
       if (response.data.FechaVigencia) {
         await SecureStore.setItem('FechaVigencia', response.data.FechaVigencia);
@@ -328,6 +330,17 @@ async function IniciarSesionApp(user: string, pass: string, navigation: any) {
 
     if (response.status === 200) {
       const datos = response.data;
+
+      // // 🧪 MODO TESTING: Forzar error de cambio de contraseña para usuarios de prueba
+      // // TODO: Comentar o eliminar esta sección en producción
+      // if (user.toLowerCase() === 'test' || user.toLowerCase() === 'sicgallegosc') {
+      //   console.log('🧪 MODO TEST: Forzando error de cambio de contraseña');
+      //   return {
+      //     tipo: 'changePassword',
+      //     mensaje: 'Por seguridad, debes cambiar tu contraseña antes de continuar.',
+      //   };
+      // }
+      // // 🧪 FIN MODO TESTING
 
       // Verificar si hay error en la respuesta
       if (datos && datos.CodigoError) {
@@ -487,6 +500,7 @@ async function cambiarClave(
   user: string,
   antiguaPass: string,
   nuevaPass: string,
+  tokenOverride?: string, // 👈 Token opcional para cuando aún no hay sesión
 ) {
   if (!antiguaPass) {
     throw new Error('Contraseña antigua requerida');
@@ -497,11 +511,21 @@ async function cambiarClave(
   }
 
   try {
-    const token = await SecureStore.getItem('Tokenbb');
+    // Intentar obtener token del parámetro o de SecureStore
+    let token = tokenOverride || await SecureStore.getItem('Tokenbb') || await SecureStore.getItem('Token');
+    
     await SecureStore.setItem('UserName', user);
 
     if (!token) {
-      throw new Error('No se encontró un token de acceso.');
+      console.warn('⚠️ No se encontró token, intentando obtener uno nuevo...');
+      // Si no hay token, intentar obtener uno con las credenciales actuales
+      const tokenResponse = await obtenerTokenAccesoBigBrother(user, antiguaPass);
+      if (tokenResponse.esOk) {
+        token = tokenResponse.token;
+        console.log('✅ Token obtenido para cambio de contraseña');
+      } else {
+        throw new Error('No se pudo obtener un token de acceso.');
+      }
     }
 
     const headers = {
@@ -520,29 +544,32 @@ async function cambiarClave(
       NuevaClave: nuevaPass,
     };
 
-    console.log('Data:', data);
-    console.log('Headers:', headers);
+    console.log('📤 Cambiar contraseña - Data:', data);
+    console.log('🔑 Token usado:', token ? '✓' : '✗');
 
     const urlApi = obtenerUrlApi();
     const response = await httpRequest({ url: `${urlApi}/Auth/cambiarClave`, method: "POST", headers, body: data });
 
     if (response.status === 200) {
       const datos = response.data;
-      console.log('2', datos);
+      console.log('📥 Respuesta cambio de contraseña:', datos);
       if (datos && datos.CodigoError && datos.MensajeError) {
         // Analizar el JSON en datos.MensajeError
         const mensajeErrorObjeto = JSON.parse(datos.MensajeError);
 
         // Obtener el mensaje de error deseado
         const mensajeError = mensajeErrorObjeto.MensajeError;
+        console.error('❌ Error al cambiar contraseña:', mensajeError);
         return false;
       }
+      console.log('✅ Contraseña cambiada exitosamente');
       return true;
     } else {
+      console.warn('⚠️ Status no 200:', response.status);
       return false;
     }
   } catch (error: any) {
-    console.error('Error al cambiar contraseña:', error);
+    console.error('❌ Error al cambiar contraseña:', error);
     return false;
   }
 }

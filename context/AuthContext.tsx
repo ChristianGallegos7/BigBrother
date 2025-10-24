@@ -31,11 +31,12 @@ function useProtectedRoute(session: string | null, isLoading: boolean) {
         // Verifica si la ruta actual está dentro del grupo '(stack)' (rutas protegidas)
         const inProtectedRoute = segments[0] === '(stack)';
 
-        // Permitir acceso sin sesión a la pantalla de recuperación de contraseña
+        // Permitir acceso sin sesión a las pantallas de recuperación y cambio de contraseña
         const isPasswordRecovery = segments[1] === 'recuperar-password';
+        const isPasswordChange = segments[1] === 'cambiar-password';
 
-        if (!session && inProtectedRoute && !isPasswordRecovery) {
-            // Si el usuario NO tiene sesión e intenta entrar a rutas protegidas (excepto recuperar-password),
+        if (!session && inProtectedRoute && !isPasswordRecovery && !isPasswordChange) {
+            // Si el usuario NO tiene sesión e intenta entrar a rutas protegidas (excepto recuperar-password y cambiar-password),
             // lo mandamos al login (la raíz '/').
             console.log('🔒 Sin sesión, redirigiendo al login');
             router.replace('/');

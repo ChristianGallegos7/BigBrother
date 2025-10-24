@@ -1,5 +1,6 @@
-// No necesitas importar 'fetch', es una función global en React Native.
-import { environment } from '@/components/core/environment';
+// utils/http/http.ts
+
+import axios, { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
 // Definimos una interfaz para que tu código sea más seguro y claro
 interface HttpRequestParams {
@@ -9,120 +10,100 @@ interface HttpRequestParams {
   body?: any;
 }
 
+// Interfaz para la respuesta simplificada
+interface HttpResponse {
+  status: number;
+  data: any;
+}
+
 export async function httpRequest({
   url,
   method = 'GET',
   headers = {},
   body,
-}: HttpRequestParams) {
+}: HttpRequestParams): Promise<HttpResponse> {
+  
+  const config: AxiosRequestConfig = {
+    url,
+    method,
+    // Timeout de 15 segundos para evitar 'Network failed' genéricos por lentitud
+    timeout: 15000, 
+    headers: {
+      // Content-Type por defecto, si no se sobreescribe o si el body es FormData
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    data: body,
+  };
+
+  // Lógica de FormData:
+  if (body instanceof FormData) {
+    // Axios y el entorno nativo manejan el Content-Type (multipart/form-data)
+    // automáticamente. Debemos eliminar el Content-Type explícito para evitar problemas.
+    delete config.headers!['Content-Type'];
+    config.data = body;
+  } else if (body) {
+    // Para POST/PUT, el cuerpo se envía como JSON stringify por defecto en tu lógica original
+    config.data = JSON.stringify(body);
+  }
+  
   try {
-    // Decide si intentamos SSL Pinning (si está habilitado y disponible el módulo)
-    const usePinning = (() => {
-      try {
-        if (!environment.sslPinning?.enabled) return false;
-        const isHttps = /^https:/i.test(url);
-        if (!isHttps) return false;
-        const u = new URL(url);
-        return environment.sslPinning.domains?.some(d => d.host === u.hostname);
-      } catch {
-        return false;
-      }
-    })();
+    const response: AxiosResponse = await axios(config);
 
-    const options: RequestInit = {
-      method,
-      headers: {
-        // Añadimos headers comunes por defecto.
-        // Si envías FormData, el Content-Type se maneja solo.
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-    };
-
-    // La lógica de SSL Pinning ya no es necesaria aquí.
-    // Expo lo aplica a nivel de la app durante la compilación.
-
-    if (body) {
-      if (body instanceof FormData) {
-        // Al usar FormData, debemos dejar que el navegador/fetch establezca el Content-Type.
-        delete (options.headers as Record<string, string>)['Content-Type'];
-        options.body = body;
-      } else {
-        options.body = JSON.stringify(body);
-      }
-    }
-
-    let response: Response;
-
-    if (usePinning) {
-      try {
-        // Carga perezosa para no romper en Managed si no está instalado
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const RNSSLPinning = require('react-native-ssl-pinning');
-        const pinnedFetch: typeof fetch = RNSSLPinning.fetch;
-
-        const u = new URL(url);
-        const domainCfg = environment.sslPinning.domains!.find(d => d.host === u.hostname);
-        const sslPinning: any = {};
-        if (domainCfg?.certs?.length) sslPinning.certs = domainCfg.certs;
-        if (domainCfg?.publicKeyHashes?.length) sslPinning.publicKeyHashes = domainCfg.publicKeyHashes;
-
-        // Construir cuerpo/headers para RNSSLPinning
-        const pinningOptions: any = {
-          method,
-          headers: options.headers,
-          sslPinning,
-          // Tiempo de espera razonable en ms
-          timeoutInterval: 30000,
-        };
-        if (body) {
-          if (body instanceof FormData) {
-            delete (pinningOptions.headers as Record<string, string>)['Content-Type'];
-            pinningOptions.body = body as any;
-          } else {
-            pinningOptions.body = JSON.stringify(body);
-          }
+    // Axios lanza un error para códigos de estado 4xx/5xx, por lo que este bloque
+    // solo se ejecuta si el status es 2xx, 3xx, o si se configuró 'validateStatus'.
+    // En este caso, asumimos el comportamiento por defecto de lanzar errores para 4xx/5xx.
+    
+    // Si el backend devuelve la data como string JSON, la parseamos (aunque Axios
+    // suele hacerlo automáticamente).
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+        try {
+            responseData = JSON.parse(responseData);
+        } catch (e) {
+            // No hacemos nada si falla el parseo, mantenemos el string
         }
-
-        const res = await pinnedFetch(url, pinningOptions as any);
-        // RNSSLPinning.fetch devuelve un objeto con status, headers y body string
-        const rawBody: any = (res as any).body;
-        const textBody = typeof rawBody === 'string' ? rawBody : String(rawBody ?? '');
-        const data = (() => {
-          try { return JSON.parse(textBody); } catch { return textBody; }
-        })();
-        if (res.status < 200 || res.status >= 300) {
-          const errorMessage = (data && (data.MensajeError || data.message)) || `Error del servidor: ${res.status}`;
-          throw new Error(errorMessage);
-        }
-        return { status: res.status, data };
-      } catch (e) {
-        console.warn('SSL pinning no disponible o fallido; usando fetch normal.', e);
-        // continúa con fetch estándar abajo
-      }
     }
 
-    response = await fetch(url, options);
+    // Si el backend incluye un campo de error dentro de la respuesta 200/201,
+    // lo manejas en la capa superior (como en tus funciones originales).
 
-    // Intentamos parsear la respuesta como JSON.
-    const data = await response.json();
-
-    // 'response.ok' es true si el status es 200-299.
-    // Si no es ok, lanzamos un error para que el bloque catch lo maneje.
-    if (!response.ok) {
-      // Usamos el mensaje de error del backend si existe, o uno genérico.
-      const errorMessage = data?.MensajeError || `Error del servidor: ${response.status}`;
-      throw new Error(errorMessage);
-    }
-
-    // Si todo fue bien, devolvemos el status y los datos.
     return {
       status: response.status,
-      data: data,
+      data: responseData,
     };
+    
   } catch (error: any) {
-    console.error('Error en httpRequest:', error.message || error);
-    // Relanzamos el error para que la función que llamó a httpRequest pueda manejarlo.
-    throw error;
+    const axiosError = error as AxiosError;
+    
+    if (axiosError.code === 'ECONNABORTED') {
+        // Error de Timeout
+        const message = 'La solicitud excedió el tiempo límite (15 segundos).';
+        console.error('Error en httpRequest:', message);
+        throw new Error(message);
+    } 
+    
+    if (axiosError.response) {
+      // Error de respuesta del servidor (4xx o 5xx)
+      const data: any = axiosError.response.data;
+      const status = axiosError.response.status;
+      
+      // Intentamos usar el mensaje de error del backend si existe
+      const errorMessage = data?.MensajeError || `Error del servidor: ${status}`;
+      
+      console.error('Error en httpRequest (HTTP):', errorMessage, status);
+      throw new Error(errorMessage);
+
+    } else if (axiosError.request) {
+      // Solicitud hecha, pero no hay respuesta (generalmente Network Error / Fallo de Pinning)
+      const message = 'Network failure: Fallo de conexión de red nativa.';
+      console.error('Error en httpRequest:', message);
+      throw new Error(message);
+
+    } else {
+      // Otros errores (configuración de Axios, JS)
+      console.error('Error en httpRequest (Axios Config):', axiosError.message);
+      throw axiosError;
+    }
   }
 }

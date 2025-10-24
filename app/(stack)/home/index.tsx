@@ -3,6 +3,7 @@ import { DetenerGrabacion, IniciarGrabacion, RegistroGrabacion, RegistroGrabacio
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { showErrorToast, showSuccessToast } from "@/utils/alertas/alertas";
 import { getDBConnection, guardarClienteLocalEnSQLite, guardarGrabacionOfflineEnSQLite, tryFlushSQLiteBacklog } from "@/utils/database/database";
+import { nowLocalISO } from "@/utils/date";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as Location from 'expo-location';
@@ -11,16 +12,16 @@ import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from "react";
 import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
- 
+
 import * as FileSystem from 'expo-file-system';
 import { copyAsync, getInfoAsync, makeDirectoryAsync, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy';
 // Compat helpers for expo-file-system variants
 const SAF = (FileSystem as any).StorageAccessFramework as
     | undefined
     | {
-            requestDirectoryPermissionsAsync?: () => Promise<{ granted: boolean; directoryUri?: string }>;
-            createFileAsync?: (dirUri: string, fileName: string, mimeType: string) => Promise<string>;
-        };
+        requestDirectoryPermissionsAsync?: () => Promise<{ granted: boolean; directoryUri?: string }>;
+        createFileAsync?: (dirUri: string, fileName: string, mimeType: string) => Promise<string>;
+    };
 
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -333,7 +334,8 @@ const HomeScreen = () => {
             // 6. ✅ Obtener datos de usuario
             const sesionUsuario = await SecureStore.getItem('SesionUsuario');
             const datosUsuario = sesionUsuario ? JSON.parse(sesionUsuario) : null;
-            const FechaInicioGrabacion = new Date().toISOString();
+            // Usar hora local sin zona (evita ver -05:00 al persistir)
+            const FechaInicioGrabacion = nowLocalISO();
             setStartDateTime(FechaInicioGrabacion);
 
             const Identificacion = clientData.Identificacion;
@@ -439,10 +441,8 @@ const HomeScreen = () => {
 
             // 2. ✅ Calcular duración y fechas
             const duracionEnSegundos = recordingTime;
-            const FechaFinGrabacion = new Date().toISOString();
-            const FechaInicioGrabacion = startDateTime || new Date(
-                new Date(FechaFinGrabacion).getTime() - duracionEnSegundos * 1000
-            ).toISOString();
+            const FechaFinGrabacion = nowLocalISO();
+            const FechaInicioGrabacion = startDateTime || nowLocalISO();
 
             console.log('🕒 Tiempo grabado:', formatTime(recordingTime));
             console.log('📅 Inicio:', FechaInicioGrabacion);
@@ -589,7 +589,9 @@ const HomeScreen = () => {
                         `Grabación enviada correctamente.\nDuración: ${formatTime(recordingTime)}`
                     );
                     resetRecordingState();
+                    loadClientData();
                     return;
+
                 } else {
                     throw new Error('No se pudo enviar la grabación al backend');
                 }
@@ -629,7 +631,7 @@ const HomeScreen = () => {
 
                                 await guardarGrabacionOfflineEnSQLite({ ...grabacionPendiente, FechaCreacion: FechaFinGrabacion });
                                 console.log(`🎙️ Grabación guardada como pendiente [${environment.pais}]`);
-                                
+
                                 showSuccessToast(
                                     'Guardado Localmente',
                                     'El audio se enviará cuando haya conexión.'
@@ -662,7 +664,7 @@ const HomeScreen = () => {
     };
 
     const supportsSAF = () => {
-    return Platform.OS === 'android' && !!SAF?.requestDirectoryPermissionsAsync;
+        return Platform.OS === 'android' && !!SAF?.requestDirectoryPermissionsAsync;
     };
     const getOrRequestAndroidDirUri = async (): Promise<string | null> => {
         try {

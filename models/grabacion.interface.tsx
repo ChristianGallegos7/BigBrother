@@ -10,4 +10,5 @@ export interface Grabacion {
     EsLocal?: boolean;
     ClienteNombreCompleto?: string;
     FechaFinGrabacion:string; 
+    FechaInicioGrabacion:string;
 }

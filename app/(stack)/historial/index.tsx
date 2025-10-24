@@ -136,7 +136,7 @@ const HistorialScreen = () => {
                         const lista: Grabacion[] = JSON.parse(audiosEnviados);
                         setLista(Array.isArray(lista) ? lista : []);
                         return;
-                    } catch {}
+                    } catch { }
                 }
                 // Si no hay en SecureStore, intentar cargar de SQLite
                 try {
@@ -153,7 +153,7 @@ const HistorialScreen = () => {
             const startTime = Date.now();
 
             // Timeout de 10 segundos para la petición
-            const timeoutPromise = new Promise<never>((_, reject) => 
+            const timeoutPromise = new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout: La consulta tardó demasiado')), 10000)
             );
 
@@ -171,14 +171,14 @@ const HistorialScreen = () => {
             let locales: { NumeroOperacion: string; Identificacion: string }[] = [];
             const maxReintentos = 3;
             let intentoActual = 0;
-            
+
             while (intentoActual < maxReintentos) {
                 try {
                     const dbStartTime = Date.now();
                     const db = await getDBConnection();
-                    
+
                     // Timeout para la consulta SQLite (2 segundos)
-                    const sqliteTimeoutPromise = new Promise<never>((_, reject) => 
+                    const sqliteTimeoutPromise = new Promise<never>((_, reject) =>
                         setTimeout(() => reject(new Error('SQLite Timeout')), 2000)
                     );
 
@@ -192,17 +192,17 @@ const HistorialScreen = () => {
                     const dbTime = Date.now() - dbStartTime;
                     console.log(`💾 Consulta SQLite completada: ${locales.length} registros (${dbTime}ms)`);
                     break; // Salir del bucle si la consulta fue exitosa
-                    
+
                 } catch (dbError: any) {
                     intentoActual++;
                     console.warn(`⚠️ Error en SQLite (intento ${intentoActual}/${maxReintentos}):`, dbError?.message);
-                    
+
                     if (intentoActual >= maxReintentos) {
                         console.error('❌ SQLite falló después de múltiples intentos. Continuando sin datos locales.');
                         locales = []; // Continuar sin datos locales
                         break;
                     }
-                    
+
                     // Esperar antes de reintentar (100ms, 200ms, 300ms)
                     await new Promise(resolve => setTimeout(resolve, intentoActual * 100));
                 }
@@ -227,7 +227,7 @@ const HistorialScreen = () => {
                     setLista(Array.isArray(lista) ? lista : []);
                     return;
                 }
-            } catch {}
+            } catch { }
             // Si no hay en SecureStore, intentar cargar de SQLite
             try {
                 const db = await getDBConnection();
@@ -242,13 +242,13 @@ const HistorialScreen = () => {
     const actualizarNumGrabaciones = async () => {
         const maxReintentos = 3;
         let intentoActual = 0;
-        
+
         while (intentoActual < maxReintentos) {
             try {
                 const db = await getDBConnection();
-                
+
                 // Timeout para la consulta SQLite (2 segundos)
-                const timeoutPromise = new Promise<never>((_, reject) => 
+                const timeoutPromise = new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('SQLite Timeout')), 2000)
                 );
 
@@ -258,20 +258,20 @@ const HistorialScreen = () => {
                     ),
                     timeoutPromise
                 ]);
-                
+
                 setNumGrabacion(result?.total || 0);
                 return; // Salir si fue exitoso
-                
+
             } catch (error: any) {
                 intentoActual++;
                 console.warn(`⚠️ Error actualizando contador (intento ${intentoActual}/${maxReintentos}):`, error?.message);
-                
+
                 if (intentoActual >= maxReintentos) {
                     console.error('❌ No se pudo actualizar el contador de grabaciones');
                     setNumGrabacion(0); // Establecer en 0 por seguridad
                     return;
                 }
-                
+
                 // Esperar antes de reintentar
                 await new Promise(resolve => setTimeout(resolve, intentoActual * 100));
             }
@@ -483,7 +483,11 @@ const HistorialScreen = () => {
                                     <Text style={styles.modalValue}>{grabacionSeleccionada.NumeroOperacion || 'N/A'}</Text>
                                 </View>
                                 <View style={styles.modalRow}>
-                                    <Text style={styles.modalLabel}>📅 Fecha:</Text>
+                                    <Text style={styles.modalLabel}>📅 Fecha Inicio:</Text>
+                                    <Text style={styles.modalValue}>{formatDateWithSeconds(grabacionSeleccionada.FechaInicioGrabacion)}</Text>
+                                </View>
+                                <View style={styles.modalRow}>
+                                    <Text style={styles.modalLabel}>📅 Fecha Fin:</Text>
                                     <Text style={styles.modalValue}>{formatDateWithSeconds(grabacionSeleccionada.FechaFinGrabacion)}</Text>
                                 </View>
                                 <View style={styles.modalRow}>

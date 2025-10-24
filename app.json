@@ -4,7 +4,7 @@
     "slug": "bigbrother-app",
     "version": "2.1.2",
     "orientation": "portrait",
-  "icon": "./assets/images/bigbrother.jpg",
+    "icon": "./assets/images/bigbrother.jpg",
     "scheme": "bigbrotherapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -21,10 +21,8 @@
       "package": "com.inventartech.bigbrother",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/bigbrother.jpg"
       },
       "permissions": [
         "RECORD_AUDIO",
@@ -49,7 +47,7 @@
       [
         "expo-splash-screen",
         {
-  "image": "./assets/images/Logos/logo.png",
+          "image": "./assets/images/Logos/logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -73,8 +71,12 @@
         }
       ],
       [
-        "./plugins/with-ssl-pinning-cert",
-        { "certFiles": ["apibg.cer"], "sourceDir": "assets" }
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
       ]
     ],
     "experiments": {
