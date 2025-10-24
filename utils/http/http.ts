@@ -1,6 +1,6 @@
 // utils/http/http.ts
 
-import axios, { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
 
 // Definimos una interfaz para que tu código sea más seguro y claro
 interface HttpRequestParams {
@@ -26,14 +26,17 @@ export async function httpRequest({
   const config: AxiosRequestConfig = {
     url,
     method,
-    // Timeout de 15 segundos para evitar 'Network failed' genéricos por lentitud
-    timeout: 15000, 
+    // Timeout más largo para Android 14 y versiones anteriores
+    timeout: 30000, // 30 segundos
     headers: {
       // Content-Type por defecto, si no se sobreescribe o si el body es FormData
       'Content-Type': 'application/json',
       ...headers,
     },
     data: body,
+    // Configuraciones adicionales para mejor compatibilidad
+    validateStatus: (status) => status < 500, // Aceptar códigos 4xx como respuestas válidas
+    maxRedirects: 5,
   };
 
   // Lógica de FormData:
@@ -78,7 +81,7 @@ export async function httpRequest({
     
     if (axiosError.code === 'ECONNABORTED') {
         // Error de Timeout
-        const message = 'La solicitud excedió el tiempo límite (15 segundos).';
+        const message = 'La solicitud excedió el tiempo límite (30 segundos).';
         console.error('Error en httpRequest:', message);
         throw new Error(message);
     } 
@@ -97,7 +100,7 @@ export async function httpRequest({
     } else if (axiosError.request) {
       // Solicitud hecha, pero no hay respuesta (generalmente Network Error / Fallo de Pinning)
       const message = 'Network failure: Fallo de conexión de red nativa.';
-      console.error('Error en httpRequest:', message);
+      console.error('Error en httpRequest:', message, axiosError.message);
       throw new Error(message);
 
     } else {

@@ -902,10 +902,10 @@ const HomeScreen = () => {
 
                         {recordedUri && (
                             <>
-                                <Text style={styles.recordedText}>Audio Guardado: {recordedUri.substring(0, 40)}...</Text>
-                                <TouchableOpacity onPress={handleShareAudio} style={{ marginTop: 12 }}>
+                                {/* <Text style={styles.recordedText}>Audio Guardado: {recordedUri.substring(0, 40)}...</Text> */}
+                                {/* <TouchableOpacity onPress={handleShareAudio} style={{ marginTop: 12 }}>
                                     <Text style={{ color: '#10b981', fontWeight: '600' }}>Compartir / Exportar audio</Text>
-                                </TouchableOpacity>
+                                </TouchableOpacity> */}
                             </>
                         )}
 

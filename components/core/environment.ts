@@ -4,18 +4,18 @@ export const environment = {
     // https://appsqa.inventar-tech.com/BigBrother/Api/Ecuador
     //urlApi: 'http://10.10.14.74:75/Api',
     //urlApi: 'https://appsqa.inventar-tech.com/BigBrother/Api/Ecuador',
-    // urlApi: {
-    //     // EC: "https://apibg.inventar-tech.com/BigBrother/Api/Ecuador",
-    //     EC: 'https://appsqa.inventar-tech.com/BigBrother/Api/Ecuador',
-    //     PE: "https://apibg.inventar-tech.com/BigBrother/Api/Peru",
-    //     GT: "https://claroapibg.inventar-tech.com/BigBrother/Api/Guatemala"
-    // },
     urlApi: {
-        // EC: "http://10.10.44.49:75/Api/Ecuador",
-        EC: "http://10.10.44.39:75/Api/Ecuador",
-        PE: "http://10.10.44.39:75/Api/Peru",
-        GT: "http://10.10.44.39:75/Api/Guatemala"
+        // EC: "https://apibg.inventar-tech.com/BigBrother/Api/Ecuador",
+        EC: 'https://appsqa.inventar-tech.com/BigBrother/Api/Ecuador',
+        PE: "https://apibg.inventar-tech.com/BigBrother/Api/Peru",
+        GT: "https://claroapibg.inventar-tech.com/BigBrother/Api/Guatemala"
     },
+    // urlApi: {
+    //     // EC: "http://10.10.44.49:75/Api/Ecuador",
+    //     EC: "http://10.10.44.39:75/Api/Ecuador",
+    //     PE: "http://10.10.44.39:75/Api/Peru",
+    //     GT: "http://10.10.44.39:75/Api/Guatemala"
+    // },
     /*       urlSignal: {
             'EC': 'http://10.10.92.120:75/Signal/Ecuador',
             'PE': 'http://10.10.92.120:75/Signal/Peru',
@@ -28,12 +28,13 @@ export const environment = {
     sistema: 'BigBrother',
     // pais: 'GT',
     pais: 'EC',
-    ambiente: 'DES',
-    // ambiente: 'QA',
+    // ambiente: 'DES',
+    ambiente: 'QA',
     // ambiente: 'PROD',
     encryptSecretKey: 'BigBrother',
     apiGateway: {
-        url: 'https://apicore.inventar-tech.com/MiCore/ApiGateway',
+        // url: 'https://apicore.inventar-tech.com/MiCore/ApiGateway',
+        url: 'https://apicoreqa.inventar-tech.com/MiCore/ApiGateway',
         // url: 'http://10.10.44.39:70/ApiGateway',
         /* user: 'LAHtZlOAiX6gsC+r/fhoYg==',
         key: 'GkVbAyLkZcagsC+r/fhoYg==', */

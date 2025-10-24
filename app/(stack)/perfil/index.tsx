@@ -177,7 +177,7 @@ const PerfilScreen = () => {
                         iconLibrary="MaterialCommunityIcons"
                         title="Contacto SOS"
                         description="Contactos de Emergencia."
-                        onPress={() => router.push('/contactosos/')}
+                        onPress={() => router.push('/(stack)/contactosos')}
                     />
 
                     <ProfileOption
@@ -185,7 +185,7 @@ const PerfilScreen = () => {
                         iconLibrary="Ionicons"
                         title="Acerca de"
                         description="Aquí puedes ver datos de la App."
-                        onPress={() => router.push('/acercade/')}
+                        onPress={() => router.push('/(stack)/acercade')}
                     />
 
                     {/* Información del Sistema
@@ -196,7 +196,13 @@ const PerfilScreen = () => {
                     </View> */}
 
                     {/* Botón de Cerrar Sesión */}
-                    <Pressable style={styles.logoutButton} onPress={handleLogout}>
+                    <Pressable 
+                        style={({ pressed }) => [
+                            styles.logoutButton,
+                            pressed && styles.logoutButtonPressed
+                        ]} 
+                        onPress={handleLogout}
+                    >
                         <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
                     </Pressable>
 
@@ -343,6 +349,17 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         alignItems: 'center',
         marginTop: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    logoutButtonPressed: {
+        backgroundColor: '#dc2626', // Rojo más oscuro cuando se presiona
+        transform: [{ scale: 0.98 }], // Efecto de hundimiento
+        shadowOpacity: 0.1,
+        elevation: 1,
     },
     logoutButtonText: {
         color: 'white',
